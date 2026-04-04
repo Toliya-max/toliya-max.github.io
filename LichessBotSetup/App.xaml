@@ -149,6 +149,13 @@
             </Setter>
         </Style>
 
+        <!-- ═══════════════ SECONDARY BUTTON ═══════════════ -->
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
+            <Setter Property="Background" Value="#252320"/>
+            <Setter Property="Foreground" Value="#a1a19f"/>
+            <Setter Property="BorderBrush" Value="#3a3834"/>
+        </Style>
+
         <!-- ═══════════════ RED BUTTON ═══════════════ -->
         <Style x:Key="RedButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
             <Setter Property="Background" Value="#5c2222"/>

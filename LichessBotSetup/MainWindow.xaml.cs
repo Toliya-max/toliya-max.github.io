@@ -69,6 +69,64 @@ namespace LichessBotSetup
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => DragMove();
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
 
+        private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            BtnCheckUpdates.IsEnabled = false;
+            BtnCheckUpdates.Content = "Checking...";
+            try
+            {
+                const string currentVersion = "1.1.0";
+                const string repo = "Toliya-max/lichess-bot";
+
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotSetup/1.0");
+                var response = await client.GetAsync($"https://api.github.com/repos/{repo}/releases/latest");
+                if (!response.IsSuccessStatusCode)
+                {
+                    MessageBox.Show(this, "Could not reach GitHub. Check your internet connection.", "Update Check Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                string json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                string tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
+                string latestVersion = tag.TrimStart('v');
+
+                if (!Version.TryParse(latestVersion, out var v1) || !Version.TryParse(currentVersion, out var v2) || v1 <= v2)
+                {
+                    MessageBox.Show(this, $"You already have the latest version (v{currentVersion}).", "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                string? assetUrl = null;
+                if (doc.RootElement.TryGetProperty("assets", out var assets))
+                    foreach (var asset in assets.EnumerateArray())
+                        if ((asset.GetProperty("name").GetString() ?? "").Equals("LichessBotSetup.exe", StringComparison.OrdinalIgnoreCase))
+                        { assetUrl = asset.GetProperty("browser_download_url").GetString(); break; }
+
+                if (assetUrl == null) { MessageBox.Show(this, "Update found but no installer in release.", "Update", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+
+                var res = MessageBox.Show(this, $"Version v{latestVersion} is available. Download and install now?", "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (res != MessageBoxResult.Yes) return;
+
+                BtnCheckUpdates.Content = "Downloading...";
+                string setupPath = Path.Combine(Path.GetTempPath(), "LichessBotSetup_update.exe");
+                var bytes = await client.GetByteArrayAsync(assetUrl);
+                File.WriteAllBytes(setupPath, bytes);
+                Process.Start(new ProcessStartInfo(setupPath) { Arguments = "/update", UseShellExecute = true });
+                Application.Current.Shutdown();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Update check failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                BtnCheckUpdates.IsEnabled = true;
+                BtnCheckUpdates.Content = "Check for Updates";
+            }
+        }
+
         // ════════════════════════════════════════════
         //  LOGGING
         // ════════════════════════════════════════════

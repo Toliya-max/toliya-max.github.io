@@ -132,12 +132,16 @@
                     </Border>
 
                     <!-- Buttons -->
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                        <Button x:Name="BtnUninstallOnly" Content="Uninstall" Style="{StaticResource RedButton}"
-                                Click="BtnUninstall_Click" Visibility="Collapsed" Margin="0,0,10,0"/>
-                        <Button x:Name="BtnInstall" Content="Install &amp; Setup  →" Style="{StaticResource AccentButton}"
-                                Click="BtnInstall_Click" Padding="28,12"/>
-                    </StackPanel>
+                    <DockPanel Grid.Row="1" Margin="0,16,0,0">
+                        <Button x:Name="BtnCheckUpdates" Content="Check for Updates" DockPanel.Dock="Left"
+                                Style="{StaticResource SecondaryButton}" Click="BtnCheckUpdates_Click" Padding="16,12"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="BtnUninstallOnly" Content="Uninstall" Style="{StaticResource RedButton}"
+                                    Click="BtnUninstall_Click" Visibility="Collapsed" Margin="0,0,10,0"/>
+                            <Button x:Name="BtnInstall" Content="Install &amp; Setup  →" Style="{StaticResource AccentButton}"
+                                    Click="BtnInstall_Click" Padding="28,12"/>
+                        </StackPanel>
+                    </DockPanel>
                 </Grid>
 
                 <!-- ══════════ PAGE 2: INSTALLING ══════════ -->
