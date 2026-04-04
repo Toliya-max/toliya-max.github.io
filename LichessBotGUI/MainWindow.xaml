@@ -132,15 +132,11 @@
 
                                 <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,10"/>
 
-                                <!-- Copy / Clear -->
-                                <UniformGrid Columns="2">
+                                <!-- Copy / Clear / Updates -->
+                                <UniformGrid Columns="2" Margin="0,0,0,6">
                                     <Button x:Name="BtnCopy" Content="Copy Logs" Click="BtnCopy_Click" Style="{StaticResource PresetButton}" Margin="0,0,4,0"/>
                                     <Button x:Name="BtnClear" Content="Clear" Click="BtnClear_Click" Style="{StaticResource PresetButton}" Margin="4,0,0,0"/>
                                 </UniformGrid>
-
-                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,14,0,10"/>
-
-                                <!-- Check for Updates -->
                                 <Button x:Name="BtnCheckUpdates" Content="Check for Updates" Click="BtnCheckUpdates_Click" Style="{StaticResource PresetButton}"/>
                             </StackPanel>
                         </ScrollViewer>
