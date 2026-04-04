@@ -75,7 +75,7 @@ def main():
         tc_minutes=args.tc_minutes,
         tc_increment=args.tc_increment,
         engine_path=resolved_engine,
-        book_path=args.book_path if args.book_path and args.book_path != "None" else BOOK_PATH,
+        book_path=args.book_path if args.book_path and args.book_path not in ("None", "Default gm_openings.bin") else BOOK_PATH,
         use_nnue=not args.no_nnue,
         auto_resign=args.auto_resign,
         resign_threshold=args.resign_threshold,

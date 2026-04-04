@@ -294,7 +294,7 @@ namespace LichessBotGUI
                         TxtMinutes.Text = config.BaseTime ?? "3";
                         TxtIncrement.Text = config.Increment ?? "0";
                         TxtEnginePath.Text = config.EnginePath ?? "Default Stockfish 18";
-                        TxtBookPath.Text = config.BookPath ?? "None";
+                        TxtBookPath.Text = config.BookPath ?? "Default gm_openings.bin";
                         ChkNNUE.IsChecked = config.UseNNUE;
                         SliderSkill.Value = config.SkillLevel;
                         SliderSpeed.Value = config.MoveSpeed;
@@ -462,7 +462,7 @@ namespace LichessBotGUI
                 parts.Add($"--engine-path \"{TxtEnginePath.Text}\"");
             }
 
-            if (TxtBookPath.Text != "None" && !string.IsNullOrWhiteSpace(TxtBookPath.Text))
+            if (TxtBookPath.Text != "Default gm_openings.bin" && TxtBookPath.Text != "None" && !string.IsNullOrWhiteSpace(TxtBookPath.Text))
             {
                 parts.Add($"--book-path \"{TxtBookPath.Text}\"");
             }
@@ -773,7 +773,7 @@ namespace LichessBotGUI
         public string BaseTime { get; set; } = "3";
         public string Increment { get; set; } = "0";
         public string EnginePath { get; set; } = "Default Stockfish 18";
-        public string BookPath { get; set; } = "None";
+        public string BookPath { get; set; } = "Default gm_openings.bin";
         public bool UseNNUE { get; set; } = true;
         public double SkillLevel { get; set; } = 20;
         public double MoveSpeed { get; set; } = 1.0;
