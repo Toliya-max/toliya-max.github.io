@@ -30,3 +30,4 @@ dist/
 dist_single/
 release/
 Payload.zip
+.claude/
