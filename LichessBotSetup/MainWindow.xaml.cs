@@ -34,7 +34,29 @@ namespace LichessBotSetup
             System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12 | System.Net.SecurityProtocolType.Tls13;
             #pragma warning restore SYSLIB0014
 
-            if (Directory.Exists(_installDir))
+            string[] args = Environment.GetCommandLineArgs();
+            bool isUpdate = args.Length > 1 && args[1].Equals("/update", StringComparison.OrdinalIgnoreCase);
+
+            if (isUpdate)
+            {
+                // Silent update: read existing token and go straight to install
+                string envPath = Path.Combine(_installDir, ".env");
+                string token = "";
+                if (File.Exists(envPath))
+                {
+                    foreach (string line in File.ReadAllLines(envPath))
+                    {
+                        if (line.StartsWith("LICHESS_API_TOKEN="))
+                        {
+                            token = line.Substring("LICHESS_API_TOKEN=".Length).Trim();
+                            break;
+                        }
+                    }
+                }
+                TxtToken.Text = token;
+                BtnInstall_Click(this, new System.Windows.RoutedEventArgs());
+            }
+            else if (Directory.Exists(_installDir))
             {
                 BtnUninstallOnly.Visibility = Visibility.Visible;
                 AlreadyInstalledBanner.Visibility = Visibility.Visible;

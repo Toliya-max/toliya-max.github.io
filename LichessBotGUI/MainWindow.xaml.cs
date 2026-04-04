@@ -750,14 +750,14 @@ namespace LichessBotGUI
 
                 AddLog($"Update available: v{latestVersion} (current: v{CurrentVersion})", LogCategory.Warning);
 
-                // Find update.zip asset
+                // Find LichessBotSetup.exe asset
                 string? assetUrl = null;
                 if (doc.RootElement.TryGetProperty("assets", out var assets))
                 {
                     foreach (var asset in assets.EnumerateArray())
                     {
                         string assetName = asset.GetProperty("name").GetString() ?? "";
-                        if (assetName.Equals("update.zip", StringComparison.OrdinalIgnoreCase))
+                        if (assetName.Equals("LichessBotSetup.exe", StringComparison.OrdinalIgnoreCase))
                         {
                             assetUrl = asset.GetProperty("browser_download_url").GetString();
                             break;
@@ -767,7 +767,7 @@ namespace LichessBotGUI
 
                 if (assetUrl == null)
                 {
-                    AddLog("Update found but no update.zip asset in release.", LogCategory.Warning);
+                    AddLog("Update found but no installer asset in release.", LogCategory.Warning);
                     return;
                 }
 
@@ -796,51 +796,31 @@ namespace LichessBotGUI
 
         private async Task DownloadAndApplyUpdateAsync(string assetUrl)
         {
-            string botDir = BotDirectory;
-            string zipPath = Path.Combine(Path.GetTempPath(), "lichess_update.zip");
-            string envPath = Path.Combine(botDir, ".env");
-            string envBackup = Path.Combine(Path.GetTempPath(), "lichess_env_backup.env");
+            string setupPath = Path.Combine(Path.GetTempPath(), "LichessBotSetup_update.exe");
 
             try
             {
-                AddLog("Downloading update...", LogCategory.System);
+                AddLog("Downloading update installer...", LogCategory.System);
 
                 using var client = new HttpClient();
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotGUI/1.0");
                 var bytes = await client.GetByteArrayAsync(assetUrl);
-                File.WriteAllBytes(zipPath, bytes);
+                File.WriteAllBytes(setupPath, bytes);
 
-                AddLog("Applying update...", LogCategory.System);
+                AddLog("Launching installer...", LogCategory.System);
 
-                // Backup .env
-                if (File.Exists(envPath))
-                    File.Copy(envPath, envBackup, overwrite: true);
-
-                // Extract over installation directory
-                ZipFile.ExtractToDirectory(zipPath, botDir, overwriteFiles: true);
-
-                // Restore .env
-                if (File.Exists(envBackup))
-                    File.Copy(envBackup, envPath, overwrite: true);
-
-                AddLog("Update applied. Restarting...", LogCategory.System);
-
-                string? exePath = Environment.ProcessPath;
-                if (!string.IsNullOrEmpty(exePath))
+                Process.Start(new ProcessStartInfo(setupPath)
                 {
-                    Process.Start(new ProcessStartInfo(exePath) { UseShellExecute = true });
-                }
+                    Arguments = "/update",
+                    UseShellExecute = true
+                });
 
                 Application.Current.Shutdown();
             }
             catch (Exception ex)
             {
                 AddLog($"Update failed: {ex.Message}", LogCategory.Error);
-            }
-            finally
-            {
-                if (File.Exists(zipPath)) File.Delete(zipPath);
-                if (File.Exists(envBackup)) File.Delete(envBackup);
+                if (File.Exists(setupPath)) File.Delete(setupPath);
             }
         }
 
