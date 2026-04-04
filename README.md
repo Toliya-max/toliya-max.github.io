@@ -16,7 +16,7 @@ Two-process design: the C# GUI launches the Python backend as a subprocess and r
 | `engine.py` | Stockfish wrapper (`ChessEngine`, `EngineManager`) with polyglot book support |
 | `config.py` | Reads `.env`, resolves paths, auto-detects optimal CPU threads and RAM hash |
 | `eval_server.py` | Local HTTP server on `127.0.0.1:8282` — serves live engine evaluation as JSON |
-| `puzzle_solver.py` | Background thread that fetches and solves Lichess daily puzzles |
+
 
 ## Features
 
