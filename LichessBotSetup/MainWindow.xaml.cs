@@ -84,8 +84,7 @@ namespace LichessBotSetup
 
                 string latestVersion = "";
                 string[] checkUrls = {
-                    $"https://cdn.jsdelivr.net/gh/{repo}@main/version.txt",
-                    $"https://raw.githubusercontent.com/{repo}/main/version.txt",
+                    "https://gist.githubusercontent.com/Toliya-max/17c837a5b5a108b5f85b76c3d8dcf9a9/raw/version.txt",
                 };
                 foreach (string checkUrl in checkUrls)
                 {

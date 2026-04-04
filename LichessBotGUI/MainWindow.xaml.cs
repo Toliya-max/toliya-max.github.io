@@ -727,8 +727,7 @@ namespace LichessBotGUI
             // Version check via jsDelivr CDN — works even where GitHub is blocked
             string[] checkUrls =
             {
-                $"https://cdn.jsdelivr.net/gh/{GithubRepo}@main/version.txt",
-                $"https://raw.githubusercontent.com/{GithubRepo}/main/version.txt",
+                "https://gist.githubusercontent.com/Toliya-max/17c837a5b5a108b5f85b76c3d8dcf9a9/raw/version.txt",
             };
 
             try
