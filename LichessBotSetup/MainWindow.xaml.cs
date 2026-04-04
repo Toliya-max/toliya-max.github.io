@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
@@ -312,6 +313,7 @@ namespace LichessBotSetup
 
                 CreateShortcut();
                 Log("Desktop shortcut created.");
+                RegisterInWindowsApps();
                 SetTaskStatus(Task6Icon, Task6Text, "done");
                 SetProgress(100);
 
@@ -541,6 +543,37 @@ namespace LichessBotSetup
         }
 
         // ════════════════════════════════════════════
+        //  WINDOWS APPS & FEATURES REGISTRY
+        // ════════════════════════════════════════════
+        private void RegisterInWindowsApps()
+        {
+            try
+            {
+                string exePath = Path.Combine(_installDir, "LichessBotGUI", "LichessBotGUI.exe");
+                string setupPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+                long sizeKB = 0;
+                try { sizeKB = new System.IO.DirectoryInfo(_installDir).GetFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) / 1024; } catch { }
+
+                using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\LichessBot");
+                key.SetValue("DisplayName", "Lichess Bot");
+                key.SetValue("DisplayVersion", "1.0.0");
+                key.SetValue("Publisher", "Toliya-max");
+                key.SetValue("InstallLocation", _installDir);
+                key.SetValue("DisplayIcon", $"\"{exePath}\"");
+                key.SetValue("UninstallString", $"\"{setupPath}\" /uninstall");
+                key.SetValue("NoModify", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                key.SetValue("NoRepair", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                key.SetValue("EstimatedSize", (int)Math.Min(sizeKB, int.MaxValue), Microsoft.Win32.RegistryValueKind.DWord);
+                Log("Registered in Windows Apps & Features.");
+            }
+            catch (Exception ex)
+            {
+                Log($"Warning: Could not register in Windows Apps: {ex.Message}");
+            }
+        }
+
+        // ════════════════════════════════════════════
         //  SHORTCUT
         // ════════════════════════════════════════════
         private void CreateShortcut()
@@ -611,6 +644,13 @@ $Shortcut.Save()
                 string shortcutPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Lichess Bot.lnk");
                 if (File.Exists(shortcutPath))
                     File.Delete(shortcutPath);
+
+                try
+                {
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(
+                        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\LichessBot", false);
+                }
+                catch { }
 
                 MessageBox.Show(this, "Lichess Bot has been successfully uninstalled!", "Uninstall Complete", MessageBoxButton.OK, MessageBoxImage.Information);
                 Application.Current.Shutdown();
