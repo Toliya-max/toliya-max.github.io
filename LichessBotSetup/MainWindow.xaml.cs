@@ -75,7 +75,7 @@ namespace LichessBotSetup
             BtnCheckUpdates.Content = "Checking...";
             try
             {
-                const string currentVersion = "1.2.0";
+                const string currentVersion = "1.2.1";
                 const string repo = "Toliya-max/lichess-bot";
 
                 using var client = new HttpClient();

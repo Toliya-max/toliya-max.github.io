@@ -8,6 +8,8 @@ import datetime
 import random
 import urllib3
 import webbrowser
+import json
+import os
 from config import LICHESS_API_TOKEN
 from engine import EngineManager
 from puzzle_solver import PuzzleSolverThread
@@ -20,7 +22,7 @@ except Exception as e:
     print(f"Warning: Could not start eval server: {e}")
 
 class LichessBot:
-    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!"):
+    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!", max_concurrent_games=1, accept_rapid=False):
         if not token:
             raise ValueError("LICHESS_API_TOKEN is not set.")
         
@@ -52,6 +54,23 @@ class LichessBot:
         self.enable_chat = enable_chat
         self.greeting = greeting
         self.gg_message = gg_message
+        self.max_concurrent_games = max_concurrent_games
+        self.accept_rapid = accept_rapid
+        self._last_eval = {}
+
+        stats_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stats.json')
+        self._stats_path = stats_path
+        if os.path.exists(stats_path):
+            try:
+                with open(stats_path, 'r') as f:
+                    s = json.load(f)
+                self.wins = s.get('wins', 0)
+                self.losses = s.get('losses', 0)
+                self.draws = s.get('draws', 0)
+            except Exception:
+                self.wins = self.losses = self.draws = 0
+        else:
+            self.wins = self.losses = self.draws = 0
         
         # Verify account and it is a bot
         retries = 5
@@ -60,6 +79,7 @@ class LichessBot:
                 self.account = self.client.account.get()
                 self.bot_id = self.account['id']
                 print(f"Successfully logged in as {self.account['username']} (ID: {self.bot_id})")
+                print(f"Stats: W={self.wins} L={self.losses} D={self.draws} Total={self.wins+self.losses+self.draws}")
                 break
             except Exception as e:
                 print(f"Failed to fetch account info. Error: {e}")
@@ -82,17 +102,20 @@ class LichessBot:
         self.send_chat(game_id, message, room='player')
         self.send_chat(game_id, message, room='spectator')
 
-    def is_blitz_or_bullet(self, time_control):
-        """
-        Check if the game is blitz, bullet, or ultrabullet based on the initial clock time.
-        Time controls in berserk are dicts like: {'type': 'clock', 'limit': 300, 'increment': 0}
-        <= 5 minutes (300 seconds) includes blitz, bullet, and ultrabullet (e.g., 15 seconds).
-        """
+    def is_acceptable_time_control(self, time_control):
         if time_control.get('type') == 'clock':
             limit = time_control.get('limit', 0)
-            if limit <= 300: # 5 minutes
+            max_limit = 900 if self.accept_rapid else 300
+            if limit <= max_limit:
                 return True
         return False
+
+    def _save_stats(self):
+        try:
+            with open(self._stats_path, 'w') as f:
+                json.dump({'wins': self.wins, 'losses': self.losses, 'draws': self.draws, 'total': self.wins + self.losses + self.draws}, f)
+        except Exception as e:
+            print(f"Failed to save stats: {e}")
 
     def handle_game(self, game_id):
         print(f"Starting game thread for game {game_id}")
@@ -166,9 +189,39 @@ class LichessBot:
                                     # Don't count aborted games towards the limit
                                     self.games_played = max(0, self.games_played - 1)
                                     print(f"[{game_id}] Game was aborted (opponent didn't move). Not counting towards limit.")
-                                elif self.enable_chat and self.gg_message:
-                                    threading.Thread(target=self.send_chat_message, args=(game_id, self.gg_message), daemon=True).start()
+                                else:
+                                    winner = event.get('winner', '')
+                                    if status in ('draw', 'stalemate'):
+                                        self.draws += 1
+                                    elif winner == ('white' if color == chess.WHITE else 'black'):
+                                        self.wins += 1
+                                    elif winner in ('white', 'black'):
+                                        self.losses += 1
+                                    else:
+                                        self.draws += 1
+                                    self._save_stats()
+                                    print(f"[{game_id}] Stats: W={self.wins} L={self.losses} D={self.draws} Total={self.wins+self.losses+self.draws}")
+                                    if self.enable_chat and self.gg_message:
+                                        threading.Thread(target=self.send_chat_message, args=(game_id, self.gg_message), daemon=True).start()
                                 break  # Exit the stream loop — game is over
+
+                            # Handle draw offers from opponent
+                            wdraw = event.get('wdraw', False)
+                            bdraw = event.get('bdraw', False)
+                            opponent_offered_draw = (wdraw and color == chess.BLACK) or (bdraw and color == chess.WHITE)
+                            if opponent_offered_draw:
+                                eval_score = self._last_eval.get(game_id)
+                                if eval_score is not None and eval_score < -1.5:
+                                    print(f"[{game_id}] Opponent offered draw, eval={eval_score:.2f}. Accepting.")
+                                    try:
+                                        requests.post(
+                                            f"https://lichess.org/api/bot/game/{game_id}/draw/yes",
+                                            headers={"Authorization": f"Bearer {self.session.token}"}
+                                        )
+                                    except Exception as e:
+                                        print(f"[{game_id}] Failed to accept draw: {e}")
+                                else:
+                                    print(f"[{game_id}] Opponent offered draw, eval={eval_score}. Declining.")
 
                             moves = event.get('moves', '').split(' ')
                             if moves and moves[0]:
@@ -288,6 +341,7 @@ class LichessBot:
         # Publish evaluation to local server
         if score is not None:
             update_eval(game_id, score, depth)
+            self._last_eval[game_id] = score
         
         if self.auto_resign and score is not None:
             # Check if engine thinks we are completely losing
@@ -340,8 +394,8 @@ class LichessBot:
                 
             try:
                 # Check internal active games tracker instead of polling Lichess API
-                if len(self.active_games) > 0:
-                    continue # Wait until current game finishes
+                if len(self.active_games) >= self.max_concurrent_games:
+                    continue # Wait until a game slot opens
                     
                 # If we already have pending challenges, wait for them to resolve or timeout
                 if len(self.pending_challenges) > 0:
@@ -370,8 +424,8 @@ class LichessBot:
                         chosen_targets = random.sample(targets, num_to_challenge)
                         
                         for target in chosen_targets:
-                            if self.stop_event.is_set() or len(self.active_games) > 0:
-                                break # abort if a game started mid-loop
+                            if self.stop_event.is_set() or len(self.active_games) >= self.max_concurrent_games:
+                                break # abort if slots are full
                                 
                             target_id = target['id']
                             time_format = "Bullet" if self.tc_minutes < 3 else "Blitz" if self.tc_minutes <= 5 else "Rapid"
@@ -436,15 +490,14 @@ class LichessBot:
                                 pass
                             continue
                         
-                        # Accept if it's bullet or blitz
-                        if self.is_blitz_or_bullet(challenge['timeControl']):
+                        if self.is_acceptable_time_control(challenge['timeControl']):
                             print(f"Accepting challenge {challenge_id} (variant: {variant})")
                             try:
                                 self.client.bots.accept_challenge(challenge_id)
                             except Exception as e:
                                 print(f"Could not accept challenge {challenge_id}: {e}")
                         else:
-                            print(f"Declining challenge {challenge_id} (not blitz/bullet)")
+                            print(f"Declining challenge {challenge_id} (time control not accepted)")
                             try:
                                 self.client.bots.decline_challenge(challenge_id, reason="timeControl")
                             except Exception as e:
@@ -453,16 +506,17 @@ class LichessBot:
                     elif event['type'] == 'gameStart':
                         self.games_played += 1
                         game_id = event['game']['gameId']
-                        print(f"Game started: {game_id}. Canceling pending challenges... (Played: {self.games_played}/{self.max_games or 'inf'})")
-                        
-                        # Cancel all pending challenges so we don't start multiple games
-                        for pending_id in list(self.pending_challenges):
-                            try:
-                                self.client.challenges.cancel(pending_id)
-                                print(f"Canceled pending challenge {pending_id}")
-                            except Exception as e:
-                                print(f"Failed to cancel {pending_id}: {e}")
-                        self.pending_challenges.clear()
+                        print(f"Game started: {game_id}. (Played: {self.games_played}/{self.max_games or 'inf'}, Active: {len(self.active_games)+1}/{self.max_concurrent_games})")
+
+                        # Cancel pending challenges only if we're at capacity
+                        if len(self.active_games) + 1 >= self.max_concurrent_games:
+                            for pending_id in list(self.pending_challenges):
+                                try:
+                                    self.client.challenges.cancel(pending_id)
+                                    print(f"Canceled pending challenge {pending_id}")
+                                except Exception as e:
+                                    print(f"Failed to cancel {pending_id}: {e}")
+                            self.pending_challenges.clear()
                         
                         # Open the game in the default browser
                         game_url = f"https://lichess.org/{game_id}"
