@@ -724,23 +724,35 @@ namespace LichessBotGUI
 
         private async Task CheckForUpdatesAsync(bool silent)
         {
+            // Version check via jsDelivr CDN — works even where GitHub is blocked
+            string[] checkUrls =
+            {
+                $"https://cdn.jsdelivr.net/gh/{GithubRepo}@main/version.txt",
+                $"https://raw.githubusercontent.com/{GithubRepo}/main/version.txt",
+            };
+
             try
             {
                 using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(10);
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotGUI/1.0");
 
-                string url = $"https://api.github.com/repos/{GithubRepo}/releases/latest";
-                var response = await client.GetAsync(url);
-                if (!response.IsSuccessStatusCode)
+                string latestVersion = "";
+                foreach (string url in checkUrls)
                 {
-                    if (!silent) AddLog($"Update check failed: {response.StatusCode}", LogCategory.Warning);
-                    return;
+                    try
+                    {
+                        latestVersion = (await client.GetStringAsync(url)).Trim().TrimStart('v');
+                        if (!string.IsNullOrEmpty(latestVersion)) break;
+                    }
+                    catch { }
                 }
 
-                string json = await response.Content.ReadAsStringAsync();
-                using var doc = JsonDocument.Parse(json);
-                string tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
-                string latestVersion = tagName.TrimStart('v');
+                if (string.IsNullOrEmpty(latestVersion))
+                {
+                    if (!silent) AddLog("Could not reach update server.", LogCategory.Warning);
+                    return;
+                }
 
                 if (!IsNewerVersion(latestVersion, CurrentVersion))
                 {
@@ -750,36 +762,15 @@ namespace LichessBotGUI
 
                 AddLog($"Update available: v{latestVersion} (current: v{CurrentVersion})", LogCategory.Warning);
 
-                // Find LichessBotSetup.exe asset
-                string? assetUrl = null;
-                if (doc.RootElement.TryGetProperty("assets", out var assets))
-                {
-                    foreach (var asset in assets.EnumerateArray())
-                    {
-                        string assetName = asset.GetProperty("name").GetString() ?? "";
-                        if (assetName.Equals("LichessBotSetup.exe", StringComparison.OrdinalIgnoreCase))
-                        {
-                            assetUrl = asset.GetProperty("browser_download_url").GetString();
-                            break;
-                        }
-                    }
-                }
-
-                if (assetUrl == null)
-                {
-                    AddLog("Update found but no installer asset in release.", LogCategory.Warning);
-                    return;
-                }
-
+                string downloadPage = $"https://github.com/{GithubRepo}/releases/latest";
                 var result = MessageBox.Show(
-                    $"Version v{latestVersion} is available.\nInstall update now?",
+                    $"Version v{latestVersion} is available!\n\nDownload the new installer from the releases page?",
                     "Update Available",
                     MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                    MessageBoxImage.Information);
 
-                if (result != MessageBoxResult.Yes) return;
-
-                await DownloadAndApplyUpdateAsync(assetUrl);
+                if (result == MessageBoxResult.Yes)
+                    Process.Start(new ProcessStartInfo(downloadPage) { UseShellExecute = true });
             }
             catch (Exception ex)
             {
@@ -792,36 +783,6 @@ namespace LichessBotGUI
             if (Version.TryParse(latest, out var v1) && Version.TryParse(current, out var v2))
                 return v1 > v2;
             return string.Compare(latest, current, StringComparison.Ordinal) > 0;
-        }
-
-        private async Task DownloadAndApplyUpdateAsync(string assetUrl)
-        {
-            string setupPath = Path.Combine(Path.GetTempPath(), "LichessBotSetup_update.exe");
-
-            try
-            {
-                AddLog("Downloading update installer...", LogCategory.System);
-
-                using var client = new HttpClient();
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotGUI/1.0");
-                var bytes = await client.GetByteArrayAsync(assetUrl);
-                File.WriteAllBytes(setupPath, bytes);
-
-                AddLog("Launching installer...", LogCategory.System);
-
-                Process.Start(new ProcessStartInfo(setupPath)
-                {
-                    Arguments = "/update",
-                    UseShellExecute = true
-                });
-
-                Application.Current.Shutdown();
-            }
-            catch (Exception ex)
-            {
-                AddLog($"Update failed: {ex.Message}", LogCategory.Error);
-                if (File.Exists(setupPath)) File.Delete(setupPath);
-            }
         }
 
         // ════════════════════════════════════════════
