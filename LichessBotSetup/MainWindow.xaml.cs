@@ -209,6 +209,31 @@ namespace LichessBotSetup
         }
 
         // ════════════════════════════════════════════
+        //  KILL OLD PROCESSES
+        // ════════════════════════════════════════════
+        private void KillOldProcesses()
+        {
+            string[] processNames = { "LichessBotGUI", "cli", "bot" };
+            foreach (string name in processNames)
+            {
+                try
+                {
+                    foreach (Process proc in Process.GetProcessesByName(name))
+                    {
+                        try
+                        {
+                            proc.Kill();
+                            proc.WaitForExit(3000);
+                            Log($"Terminated process: {name}.exe");
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // ════════════════════════════════════════════
         //  INSTALL FLOW
         // ════════════════════════════════════════════
         private async void BtnInstall_Click(object sender, RoutedEventArgs e)
@@ -225,6 +250,9 @@ namespace LichessBotSetup
             ShowPage("install");
             SetProgress(0);
             TxtLog.Text = "";
+
+            // Kill any running instances before install
+            KillOldProcesses();
 
             try
             {
