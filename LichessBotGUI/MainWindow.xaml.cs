@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -66,6 +67,9 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
+        private const string CurrentVersion = "1.0.0";
+        private const string GithubRepo = "Toliya-max/lichess-bot";
+
         private Process? _botProcess;
         private bool _isRunning;
         private ObservableCollection<LogEntry> _logEntries = new();
@@ -103,10 +107,25 @@ namespace LichessBotGUI
             ActivityList.ItemsSource = _logEntries;
             _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
             _toastTimer.Tick += (s, e) => { ToastBorder.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
-            AddLog("Lichess Bot Controller — Ready.", LogCategory.System);
+            AddLog($"Lichess Bot Controller v{CurrentVersion} — Ready.", LogCategory.System);
             AddLog($"Bot directory: {BotDirectory}", LogCategory.System);
             LoadSettings();
             LoadToken();
+            WriteVersionFile();
+            _ = CheckForUpdatesAsync(silent: true);
+        }
+
+        // ════════════════════════════════════════════
+        //  VERSION FILE
+        // ════════════════════════════════════════════
+        private void WriteVersionFile()
+        {
+            try
+            {
+                string versionPath = Path.Combine(BotDirectory, "version.txt");
+                File.WriteAllText(versionPath, CurrentVersion);
+            }
+            catch { }
         }
 
         // ════════════════════════════════════════════
@@ -691,6 +710,138 @@ namespace LichessBotGUI
         {
             _logEntries.Clear();
             AddLog("Console cleared.", LogCategory.System);
+        }
+
+        // ════════════════════════════════════════════
+        //  UPDATE CHECK
+        // ════════════════════════════════════════════
+        private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            BtnCheckUpdates.IsEnabled = false;
+            await CheckForUpdatesAsync(silent: false);
+            BtnCheckUpdates.IsEnabled = true;
+        }
+
+        private async Task CheckForUpdatesAsync(bool silent)
+        {
+            try
+            {
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotGUI/1.0");
+
+                string url = $"https://api.github.com/repos/{GithubRepo}/releases/latest";
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (!silent) AddLog($"Update check failed: {response.StatusCode}", LogCategory.Warning);
+                    return;
+                }
+
+                string json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                string tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
+                string latestVersion = tagName.TrimStart('v');
+
+                if (!IsNewerVersion(latestVersion, CurrentVersion))
+                {
+                    if (!silent) AddLog($"Already up to date (v{CurrentVersion}).", LogCategory.System);
+                    return;
+                }
+
+                AddLog($"Update available: v{latestVersion} (current: v{CurrentVersion})", LogCategory.Warning);
+
+                // Find update.zip asset
+                string? assetUrl = null;
+                if (doc.RootElement.TryGetProperty("assets", out var assets))
+                {
+                    foreach (var asset in assets.EnumerateArray())
+                    {
+                        string assetName = asset.GetProperty("name").GetString() ?? "";
+                        if (assetName.Equals("update.zip", StringComparison.OrdinalIgnoreCase))
+                        {
+                            assetUrl = asset.GetProperty("browser_download_url").GetString();
+                            break;
+                        }
+                    }
+                }
+
+                if (assetUrl == null)
+                {
+                    AddLog("Update found but no update.zip asset in release.", LogCategory.Warning);
+                    return;
+                }
+
+                var result = MessageBox.Show(
+                    $"Version v{latestVersion} is available.\nInstall update now?",
+                    "Update Available",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result != MessageBoxResult.Yes) return;
+
+                await DownloadAndApplyUpdateAsync(assetUrl);
+            }
+            catch (Exception ex)
+            {
+                if (!silent) AddLog($"Update check error: {ex.Message}", LogCategory.Error);
+            }
+        }
+
+        private static bool IsNewerVersion(string latest, string current)
+        {
+            if (Version.TryParse(latest, out var v1) && Version.TryParse(current, out var v2))
+                return v1 > v2;
+            return string.Compare(latest, current, StringComparison.Ordinal) > 0;
+        }
+
+        private async Task DownloadAndApplyUpdateAsync(string assetUrl)
+        {
+            string botDir = BotDirectory;
+            string zipPath = Path.Combine(Path.GetTempPath(), "lichess_update.zip");
+            string envPath = Path.Combine(botDir, ".env");
+            string envBackup = Path.Combine(Path.GetTempPath(), "lichess_env_backup.env");
+
+            try
+            {
+                AddLog("Downloading update...", LogCategory.System);
+
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotGUI/1.0");
+                var bytes = await client.GetByteArrayAsync(assetUrl);
+                File.WriteAllBytes(zipPath, bytes);
+
+                AddLog("Applying update...", LogCategory.System);
+
+                // Backup .env
+                if (File.Exists(envPath))
+                    File.Copy(envPath, envBackup, overwrite: true);
+
+                // Extract over installation directory
+                ZipFile.ExtractToDirectory(zipPath, botDir, overwriteFiles: true);
+
+                // Restore .env
+                if (File.Exists(envBackup))
+                    File.Copy(envBackup, envPath, overwrite: true);
+
+                AddLog("Update applied. Restarting...", LogCategory.System);
+
+                string? exePath = Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(exePath))
+                {
+                    Process.Start(new ProcessStartInfo(exePath) { UseShellExecute = true });
+                }
+
+                Application.Current.Shutdown();
+            }
+            catch (Exception ex)
+            {
+                AddLog($"Update failed: {ex.Message}", LogCategory.Error);
+            }
+            finally
+            {
+                if (File.Exists(zipPath)) File.Delete(zipPath);
+                if (File.Exists(envBackup)) File.Delete(envBackup);
+            }
         }
 
         // ════════════════════════════════════════════
