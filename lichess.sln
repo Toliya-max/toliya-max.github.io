@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LichessBotGUI", "LichessBotGUI\LichessBotGUI.csproj", "{4D167697-1083-2D1E-C959-220BB5E3AB89}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LichessBotSetup", "LichessBotSetup\LichessBotSetup.csproj", "{78E09DDC-0489-D409-5C15-D10F52DD9965}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4D167697-1083-2D1E-C959-220BB5E3AB89}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D167697-1083-2D1E-C959-220BB5E3AB89}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D167697-1083-2D1E-C959-220BB5E3AB89}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D167697-1083-2D1E-C959-220BB5E3AB89}.Release|Any CPU.Build.0 = Release|Any CPU
+		{78E09DDC-0489-D409-5C15-D10F52DD9965}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{78E09DDC-0489-D409-5C15-D10F52DD9965}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{78E09DDC-0489-D409-5C15-D10F52DD9965}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{78E09DDC-0489-D409-5C15-D10F52DD9965}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {92BF2992-94CD-4FD5-8303-A00C3011E02A}
+	EndGlobalSection
+EndGlobal

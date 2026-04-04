@@ -1,0 +1,270 @@
+<Window x:Class="LichessBotSetup.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Lichess Bot Installer" Height="560" Width="700"
+        WindowStartupLocation="CenterScreen" Background="Transparent"
+        WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Border BorderBrush="#2a2826" BorderThickness="1" CornerRadius="12" Background="#12110f">
+        <Grid Margin="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- ═══════════════ TITLE BAR ═══════════════ -->
+            <Border Grid.Row="0" Background="#0e0d0b" CornerRadius="12,12,0,0" Padding="20,12">
+                <DockPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="♞" Foreground="#b58863" FontSize="20" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Lichess Bot Setup" Foreground="#e8e6e3" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button DockPanel.Dock="Right" Content="✕" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Background="Transparent" Foreground="#666" BorderThickness="0" FontSize="16" Padding="8,2"
+                            Click="BtnClose_Click" Cursor="Hand" ToolTip="Close">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                    <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="#3a1818"/>
+                                        <Setter Property="Foreground" Value="#FF6666"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </DockPanel>
+            </Border>
+
+            <!-- ═══════════════ STEP INDICATOR ═══════════════ -->
+            <Border Grid.Row="1" Background="#161412" Padding="0,20">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Step 1 -->
+                    <StackPanel HorizontalAlignment="Center" Width="80">
+                        <Border x:Name="Step1Circle" Style="{StaticResource StepCircle}"
+                                Background="#b58863" BorderBrush="#c9975a" HorizontalAlignment="Center">
+                            <TextBlock x:Name="Step1Text" Text="1" Foreground="White" FontWeight="Bold" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="API Key" Foreground="#b58863" FontSize="11" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    </StackPanel>
+
+                    <!-- Line 1-2 -->
+                    <Rectangle x:Name="Line12" Width="80" Height="2" Fill="#2a2826" VerticalAlignment="Top" Margin="0,17,0,0"/>
+
+                    <!-- Step 2 -->
+                    <StackPanel HorizontalAlignment="Center" Width="80">
+                        <Border x:Name="Step2Circle" Style="{StaticResource StepCircle}" HorizontalAlignment="Center">
+                            <TextBlock x:Name="Step2Text" Text="2" Foreground="#666" FontWeight="Bold" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock x:Name="Step2Label" Text="Install" Foreground="#666" FontSize="11" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    </StackPanel>
+
+                    <!-- Line 2-3 -->
+                    <Rectangle x:Name="Line23" Width="80" Height="2" Fill="#2a2826" VerticalAlignment="Top" Margin="0,17,0,0"/>
+
+                    <!-- Step 3 -->
+                    <StackPanel HorizontalAlignment="Center" Width="80">
+                        <Border x:Name="Step3Circle" Style="{StaticResource StepCircle}" HorizontalAlignment="Center">
+                            <TextBlock x:Name="Step3Text" Text="3" Foreground="#666" FontWeight="Bold" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock x:Name="Step3Label" Text="Done" Foreground="#666" FontSize="11" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════════════ CONTENT AREA ═══════════════ -->
+            <Grid Grid.Row="2" Margin="30,10,30,30">
+
+                <!-- ══════════ PAGE 1: TOKEN INPUT ══════════ -->
+                <Grid x:Name="PageToken">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="#1e1c19" CornerRadius="10" BorderBrush="#2a2826" BorderThickness="1" Padding="28,24">
+                        <StackPanel VerticalAlignment="Center">
+                            <!-- Header -->
+                            <TextBlock Text="♞" Foreground="#b58863" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                            <TextBlock Text="Enter Your Lichess API Token" Foreground="#e8e6e3" FontSize="20" FontWeight="Bold"
+                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock Text="Generate a token at lichess.org/account/oauth/token with Bot scopes enabled."
+                                       Foreground="#a1a19f" FontSize="13" HorizontalAlignment="Center" TextWrapping="Wrap"
+                                       TextAlignment="Center" Margin="0,0,0,24"/>
+
+                            <!-- Token Input -->
+                            <TextBlock Text="API Token" Foreground="#a1a19f" FontSize="12" Margin="0,0,0,6"/>
+                            <TextBox x:Name="TxtToken" Style="{StaticResource ModernTextBox}" Height="44"
+                                     VerticalContentAlignment="Center"/>
+
+                            <!-- Warning -->
+                            <Border Background="#2a2210" CornerRadius="6" Padding="12,10" Margin="0,16,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚠" Foreground="#d4a76a" FontSize="14" VerticalAlignment="Top" Margin="0,0,8,0"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="#d4a76a" FontSize="12">
+                                        If your account is not yet a Bot account, it will be automatically upgraded. This action is irreversible.
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Already installed info -->
+                            <Border x:Name="AlreadyInstalledBanner" Background="#1a2a1a" CornerRadius="6" Padding="12,10"
+                                    Margin="0,10,0,0" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="✓" Foreground="#7eaf85" FontSize="14" VerticalAlignment="Top" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Lichess Bot is already installed. Click Install to update, or use Uninstall below."
+                                               TextWrapping="Wrap" Foreground="#7eaf85" FontSize="12"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Buttons -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <Button x:Name="BtnUninstallOnly" Content="Uninstall" Style="{StaticResource RedButton}"
+                                Click="BtnUninstall_Click" Visibility="Collapsed" Margin="0,0,10,0"/>
+                        <Button x:Name="BtnInstall" Content="Install &amp; Setup  →" Style="{StaticResource AccentButton}"
+                                Click="BtnInstall_Click" Padding="28,12"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ══════════ PAGE 2: INSTALLING ══════════ -->
+                <Grid x:Name="PageInstall" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="#1e1c19" CornerRadius="10" BorderBrush="#2a2826" BorderThickness="1" Padding="28,24">
+                        <StackPanel>
+                            <TextBlock Text="Setting up your Lichess Bot..." Foreground="#e8e6e3" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="Please wait while we configure everything." Foreground="#a1a19f" FontSize="13" Margin="0,0,0,24"/>
+
+                            <!-- Task List -->
+                            <StackPanel x:Name="TaskList" Margin="0,0,0,20">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock x:Name="Task1Icon" Text="○" Foreground="#555" FontSize="16" Width="24" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="Task1Text" Text="Validate API token &amp; check account" Foreground="#888" FontSize="14"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock x:Name="Task2Icon" Text="○" Foreground="#555" FontSize="16" Width="24" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="Task2Text" Text="Upgrade account to BOT" Foreground="#888" FontSize="14"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock x:Name="Task3Icon" Text="○" Foreground="#555" FontSize="16" Width="24" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="Task3Text" Text="Extract application files" Foreground="#888" FontSize="14"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock x:Name="Task4Icon" Text="○" Foreground="#555" FontSize="16" Width="24" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="Task4Text" Text="Download &amp; install chess engine" Foreground="#888" FontSize="14"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock x:Name="Task5Icon" Text="○" Foreground="#555" FontSize="16" Width="24" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="Task5Text" Text="Install Python dependencies" Foreground="#888" FontSize="14"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock x:Name="Task6Icon" Text="○" Foreground="#555" FontSize="16" Width="24" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="Task6Text" Text="Create desktop shortcut" Foreground="#888" FontSize="14"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Log Area -->
+                            <Border Background="#100f0d" CornerRadius="6" BorderBrush="#1a1917" BorderThickness="1"
+                                    MaxHeight="120" Margin="0,0,0,10">
+                                <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto">
+                                    <TextBlock x:Name="TxtLog" Foreground="#7eaf85" FontFamily="Consolas" FontSize="12"
+                                               Padding="12,8" TextWrapping="Wrap"/>
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Progress Bar -->
+                    <Border Grid.Row="1" Margin="0,16,0,0" CornerRadius="4" Background="#1e1c19" Height="8"
+                            ClipToBounds="True" BorderBrush="#2a2826" BorderThickness="1">
+                        <Grid>
+                            <Rectangle x:Name="ProgressFill" Fill="#b58863" HorizontalAlignment="Left" Width="0"
+                                       RadiusX="3" RadiusY="3"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ══════════ PAGE 3: COMPLETE ══════════ -->
+                <Grid x:Name="PageComplete" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="#1e1c19" CornerRadius="10" BorderBrush="#2a2826" BorderThickness="1" Padding="28,24">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <!-- Success Icon -->
+                            <Border Width="64" Height="64" CornerRadius="32" Background="#1a2e12" HorizontalAlignment="Center" Margin="0,0,0,16">
+                                <TextBlock Text="✓" Foreground="#629924" FontSize="32" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+
+                            <TextBlock Text="Setup Complete!" Foreground="#e8e6e3" FontSize="24" FontWeight="Bold"
+                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="TxtCompleteInfo" Foreground="#a1a19f" FontSize="14" TextAlignment="Center"
+                                       TextWrapping="Wrap" MaxWidth="400" HorizontalAlignment="Center" Margin="0,0,0,8">
+                                Your Lichess Bot has been installed successfully. Launch it from the desktop shortcut or click below.
+                            </TextBlock>
+                            <TextBlock x:Name="TxtInstallPath" Foreground="#666" FontSize="11" FontFamily="Consolas"
+                                       HorizontalAlignment="Center" Margin="0,0,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Action Buttons -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+                        <Button Content="Launch Bot" Style="{StaticResource GreenButton}" Click="BtnLaunch_Click"
+                                Padding="28,12" Margin="0,0,10,0" FontSize="15"/>
+                        <Button Content="Uninstall" Style="{StaticResource RedButton}" Click="BtnUninstall_Click"
+                                Margin="0,0,10,0"/>
+                        <Button Content="Exit" Style="{StaticResource ModernButton}" Click="BtnClose_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ══════════ ERROR PAGE ══════════ -->
+                <Grid x:Name="PageError" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="#1e1c19" CornerRadius="10" BorderBrush="#2a2826" BorderThickness="1" Padding="28,24">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Border Width="64" Height="64" CornerRadius="32" Background="#2e1212" HorizontalAlignment="Center" Margin="0,0,0,16">
+                                <TextBlock Text="✗" Foreground="#d32f2f" FontSize="32" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Text="Installation Failed" Foreground="#e8e6e3" FontSize="24" FontWeight="Bold"
+                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="TxtErrorDetail" Foreground="#FF8080" FontSize="13" TextAlignment="Center"
+                                       TextWrapping="Wrap" MaxWidth="450" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+                        <Button Content="← Try Again" Style="{StaticResource AccentButton}" Click="BtnRetry_Click"
+                                Padding="28,12" Margin="0,0,10,0"/>
+                        <Button Content="Exit" Style="{StaticResource ModernButton}" Click="BtnClose_Click"/>
+                    </StackPanel>
+                </Grid>
+
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

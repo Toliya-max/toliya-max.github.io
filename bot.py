@@ -1,0 +1,515 @@
+import berserk
+import threading
+import traceback
+import chess
+import time
+import requests
+import datetime
+import random
+import urllib3
+import webbrowser
+from config import LICHESS_API_TOKEN
+from engine import EngineManager
+from puzzle_solver import PuzzleSolverThread
+from eval_server import start_eval_server, update_eval
+
+# Start the evaluation microservice globally
+try:
+    start_eval_server(port=8282)
+except Exception as e:
+    print(f"Warning: Could not start eval server: {e}")
+
+class LichessBot:
+    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!"):
+        if not token:
+            raise ValueError("LICHESS_API_TOKEN is not set.")
+        
+        self.session = berserk.TokenSession(token)
+        self.client = berserk.Client(session=self.session)
+        self.active_games = set()  # Track active games internally
+        self.pending_challenges = set() # Track challenges we sent
+        
+        self.min_rating = min_rating
+        self.enable_challenger = enable_challenger
+        self.rated_challenges = rated_challenges
+        self.max_games = max_games
+        self.skill_level = skill_level
+        self.max_depth = max_depth
+        self.speed_multiplier = speed_multiplier
+        self.engine_path = engine_path
+        self.book_path = book_path
+        self.use_nnue = use_nnue
+        self.auto_resign = auto_resign
+        self.resign_threshold = resign_threshold
+        self.threads = threads
+        self.hash_size = hash_size
+        self.move_overhead = move_overhead
+        self.games_played = 0
+        self.tc_minutes = tc_minutes
+        self.tc_increment = tc_increment
+        self.stop_event = stop_event or threading.Event()
+        self._main_backoff = 60
+        self.enable_chat = enable_chat
+        self.greeting = greeting
+        self.gg_message = gg_message
+        
+        # Verify account and it is a bot
+        retries = 5
+        while retries > 0:
+            try:
+                self.account = self.client.account.get()
+                self.bot_id = self.account['id']
+                print(f"Successfully logged in as {self.account['username']} (ID: {self.bot_id})")
+                break
+            except Exception as e:
+                print(f"Failed to fetch account info. Error: {e}")
+                retries -= 1
+                if retries == 0:
+                    raise
+                print("Retrying login in 2 seconds...")
+                time.sleep(2)
+
+    def send_chat(self, game_id, message, room='player'):
+        """Send a chat message in a game. room='player' (opponent) or 'spectator' (observers)."""
+        try:
+            self.client.bots.post_message(game_id, message, spectator=(room == 'spectator'))
+            print(f"[{game_id}] Chat sent ({room}): {message}")
+        except Exception as e:
+            print(f"[{game_id}] Failed to send chat: {e}")
+
+    def send_chat_message(self, game_id, message):
+        """Send to both player and spectator rooms."""
+        self.send_chat(game_id, message, room='player')
+        self.send_chat(game_id, message, room='spectator')
+
+    def is_blitz_or_bullet(self, time_control):
+        """
+        Check if the game is blitz, bullet, or ultrabullet based on the initial clock time.
+        Time controls in berserk are dicts like: {'type': 'clock', 'limit': 300, 'increment': 0}
+        <= 5 minutes (300 seconds) includes blitz, bullet, and ultrabullet (e.g., 15 seconds).
+        """
+        if time_control.get('type') == 'clock':
+            limit = time_control.get('limit', 0)
+            if limit <= 300: # 5 minutes
+                return True
+        return False
+
+    def handle_game(self, game_id):
+        print(f"Starting game thread for game {game_id}")
+        self.active_games.add(game_id)
+        engine = EngineManager.get_engine(
+            skill_level=self.skill_level,
+            engine_path=self.engine_path,
+            book_path=self.book_path,
+            use_nnue=self.use_nnue,
+            threads=self.threads,
+            hash_size=self.hash_size,
+            move_overhead=self.move_overhead,
+        )
+        board = chess.Board()
+        color = None
+        is_chess960 = False
+        
+        
+        try:
+            retry_count = 0
+            while True:
+                try:
+                    for event in self.client.bots.stream_game_state(game_id):
+                        retry_count = 0 # reset on successful event
+                        if event['type'] == 'gameFull':
+                            # Detect Chess960
+                            variant = event.get('variant', {}).get('key', 'standard')
+                            is_chess960 = (variant == 'chess960')
+                            
+                            if is_chess960:
+                                print(f"[{game_id}] Chess960 game detected! Configuring engine...")
+                                try:
+                                    engine.engine.configure({"UCI_Chess960": True})
+                                except:
+                                    pass
+                            
+                            # Get initial FEN (important for Chess960)
+                            initial_fen = event.get('initialFen', 'startpos')
+                            if initial_fen and initial_fen != 'startpos':
+                                board = chess.Board(initial_fen)
+                            else:
+                                board = chess.Board()
+                            
+                            if is_chess960:
+                                board.chess960 = True
+                            
+                            # Parse initial state
+                            if event['white'].get('id') == self.bot_id:
+                                color = chess.WHITE
+                            else:
+                                color = chess.BLACK
+                                
+                            state = event['state']
+                            if state.get('moves'):
+                                for uci_move in state['moves'].split(' '):
+                                    board.push_uci(uci_move)
+                                    
+                            if board.turn == color:
+                                self.play_move(game_id, event, board, engine, color)
+                            
+                            # Send greeting after game starts
+                            if self.enable_chat and self.greeting:
+                                threading.Thread(target=self.send_chat_message, args=(game_id, self.greeting), daemon=True).start()
+                                
+                        elif event['type'] == 'gameState':
+                            # Check if game ended (aborted, resign, mate, etc.)
+                            status = event.get('status', 'started')
+                            if status in ('aborted', 'resign', 'mate', 'outoftime', 'draw', 'stalemate', 'timeout', 'noStart'):
+                                print(f"[{game_id}] Game ended: {status}")
+                                if status == 'aborted':
+                                    # Don't count aborted games towards the limit
+                                    self.games_played = max(0, self.games_played - 1)
+                                    print(f"[{game_id}] Game was aborted (opponent didn't move). Not counting towards limit.")
+                                elif self.enable_chat and self.gg_message:
+                                    threading.Thread(target=self.send_chat_message, args=(game_id, self.gg_message), daemon=True).start()
+                                break  # Exit the stream loop — game is over
+
+                            moves = event.get('moves', '').split(' ')
+                            if moves and moves[0]:
+                                # Reconstruct board from initial position
+                                if initial_fen and initial_fen != 'startpos':
+                                    board = chess.Board(initial_fen)
+                                else:
+                                    board = chess.Board()
+                                if is_chess960:
+                                    board.chess960 = True
+                                for uci_move in moves:
+                                    board.push_uci(uci_move)
+
+                                if board.turn == color:
+                                    print(f"[{game_id}] It is our turn to play. Calculating move...")
+                                    self.play_move(game_id, event, board, engine, color)
+                                else:
+                                    print(f"[{game_id}] Opponent's turn.")
+                            else:
+                                print(f"[{game_id}] Empty moves array received.")
+                                
+                        elif event['type'] == 'chatLine':
+                            username = event.get('username', '')
+                            text = event.get('text', '')
+                            room = event.get('room', 'player')
+                            print(f"[{game_id}] Chat from {username} ({room}): {text}")
+                        else:
+                            print(f"[{game_id}] Unknown event type: {event.get('type')}")
+                            
+                    # Stream finished normally
+                    break 
+
+                except (requests.exceptions.ChunkedEncodingError, 
+                        requests.exceptions.ConnectionError, 
+                        requests.exceptions.ReadTimeout,
+                        urllib3.exceptions.ProtocolError,
+                        urllib3.exceptions.HTTPError) as stream_err:
+                    print(f"Warning: Stream dropped for {game_id} ({stream_err}). Reconnecting...")
+                    retry_count += 1
+                    if retry_count > 10:
+                        print(f"Error: Could not reconnect to game {game_id} after 10 tries.")
+                        break
+                    time.sleep(1) # wait before reconnecting
+                except Exception as default_err:
+                    err_str = str(default_err)
+                    # Handle 429 Too Many Requests (rate limiting)
+                    if "429" in err_str or "Too Many Requests" in err_str:
+                        retry_count += 1
+                        wait_time = min(60, 2 ** retry_count)  # exponential backoff, max 60s
+                        print(f"[!] Rate limited (429) for game {game_id}. Waiting {wait_time}s before retry #{retry_count}...")
+                        time.sleep(wait_time)
+                        if retry_count > 8:
+                            print(f"Error: Rate limited too many times for game {game_id}. Giving up.")
+                            break
+                    # Handle SSL/Connection errors by string matching as a fallback
+                    elif any(msg in err_str for msg in ["SSLError", "UNEXPECTED_EOF", "MaxRetryError", "Connection aborted", "Remote end closed"]):
+                        print(f"Warning: Network connection issue for {game_id} ({err_str}). Reconnecting...")
+                        retry_count += 1
+                        if retry_count > 10:
+                            print(f"Error: Could not reconnect after 10 tries.")
+                            break
+                        time.sleep(2)
+                    else:
+                        raise # Re-raise if it's a completely different error
+
+        except Exception as e:
+            print(f"Error in game thread {game_id}: {e}")
+            traceback.print_exc()
+        finally:
+            engine.quit()
+            self.active_games.discard(game_id)
+            print(f"Game {game_id} thread completed.")
+            if self.max_games and self.games_played >= self.max_games and len(self.active_games) == 0:
+                print("Max games reached and all active games finished. Stopping bot...")
+                self.stop_event.set()
+
+    def play_move(self, game_id, event, board, engine, color):
+        if board.is_game_over():
+            return
+            
+        # Time management
+        state = event if event['type'] == 'gameState' else event['state']
+        
+        # Check clocks from the event state
+        wtime = state.get('wtime')
+        btime = state.get('btime')
+        winc = state.get('winc', 0)
+        binc = state.get('binc', 0)
+        
+        # Extract seconds from datetime.timedelta objects if necessary
+        def to_seconds(val):
+            if isinstance(val, datetime.timedelta):
+                return val.total_seconds()
+            elif val is not None:
+                return float(val) / 1000.0  # fallback in case it's actually ms ints
+            return None
+            
+        wtime_sec = to_seconds(wtime)
+        btime_sec = to_seconds(btime)
+        winc_sec = to_seconds(winc)
+        binc_sec = to_seconds(binc)
+        
+        # Calculate move
+        print(f"[{game_id}] Giving engine wtime={wtime_sec}, btime={btime_sec} (Speed Mult: {self.speed_multiplier}x, Depth: {self.max_depth or 'inf'})")
+        
+        # Reset eval display to calculating
+        update_eval(game_id, None, None)
+        
+        move, score, depth = engine.get_best_move(
+            board, 
+            wtime=wtime_sec, btime=btime_sec, winc=winc_sec, binc=binc_sec,
+            max_depth=self.max_depth,
+            speed_multiplier=self.speed_multiplier,
+            return_score=True
+        )
+        
+        # Publish evaluation to local server
+        if score is not None:
+            update_eval(game_id, score, depth)
+        
+        if self.auto_resign and score is not None:
+            # Check if engine thinks we are completely losing
+            if score < self.resign_threshold:
+                print(f"[{game_id}] Evaluated score is {score}, which is worse than the resign threshold of {self.resign_threshold}. Resigning...")
+                try:
+                    self.client.bots.resign_game(game_id)
+                except Exception as e:
+                    print(f"[{game_id}] Error trying to resign: {e}")
+                return
+        
+        if move:
+            if score is not None:
+                # Add + sign for positive scores for readability
+                # Handle mate scores which EngineManager might return as +/- 1000.0
+                if score >= 900.0:
+                    score_str = f"M"
+                elif score <= -900.0:
+                    score_str = f"-M"
+                else:
+                    score_str = f"+{score:.2f}" if score > 0 else f"{score:.2f}"
+                print(f"[{game_id}] Engine selected move: {move.uci()} (Eval: {score_str} | Color: {color})")
+            else:
+                print(f"[{game_id}] Engine selected move: {move.uci()}")
+            for attempt in range(6):  # Retry up to 6 times for bullet reliability
+                try:
+                    self.client.bots.make_move(game_id, move.uci())
+                    print(f"[{game_id}] Successfully played move: {move.uci()}")
+                    break
+                except Exception as e:
+                    print(f"[{game_id}] Move failed (attempt {attempt+1}/6): {e}")
+                    import time
+                    time.sleep(0.05) # very quick retry in case of temporal 502/timeout
+        else:
+            print(f"[{game_id}] Engine returned no move!")
+
+    def run_challenger(self, interval_seconds=5):
+        # We will try to challenge random bots
+        clock_limit = int(max(15, self.tc_minutes * 60))
+        clock_increment = int(self.tc_increment)
+        
+        while not self.stop_event.is_set():
+            time.sleep(interval_seconds)
+            
+            if not self.enable_challenger:
+                continue
+                
+            if self.max_games and self.games_played >= self.max_games:
+                continue
+                
+            try:
+                # Check internal active games tracker instead of polling Lichess API
+                if len(self.active_games) > 0:
+                    continue # Wait until current game finishes
+                    
+                # If we already have pending challenges, wait for them to resolve or timeout
+                if len(self.pending_challenges) > 0:
+                    continue
+                
+                # Fetch currently online bots (gives a few dozen at a time)
+                online_bots = list(self.client.bots.get_online_bots())
+                if online_bots:
+                    # Filter out ourselves and only pick high rated bots (>= 2500 blitz)
+                    targets = []
+                    for b in online_bots:
+                        if b['id'] == self.bot_id:
+                            continue
+                            
+                        # Try to get the blitz rating from the perfs dict
+                        try:
+                            blitz_rating = b.get('perfs', {}).get('blitz', {}).get('rating', 0)
+                            if blitz_rating >= self.min_rating:
+                                targets.append(b)
+                        except:
+                            pass
+                            
+                    if targets:
+                        # Pick up to 2 random bots to challenge at once (avoiding rate limits)
+                        num_to_challenge = min(2, len(targets))
+                        chosen_targets = random.sample(targets, num_to_challenge)
+                        
+                        for target in chosen_targets:
+                            if self.stop_event.is_set() or len(self.active_games) > 0:
+                                break # abort if a game started mid-loop
+                                
+                            target_id = target['id']
+                            time_format = "Bullet" if self.tc_minutes < 3 else "Blitz" if self.tc_minutes <= 5 else "Rapid"
+                            print(f"Challenger: Sending {'Rated' if self.rated_challenges else 'Casual'} {self.tc_minutes}+{self.tc_increment} {time_format} challenge to bot => {target_id}")
+                            try:
+                                response = self.client.challenges.create(target_id, self.rated_challenges, clock_limit=clock_limit, clock_increment=clock_increment)
+                                if 'challenge' in response and 'id' in response['challenge']:
+                                    self.pending_challenges.add(response['challenge']['id'])
+                                time.sleep(2.0) # 2-second delay between sending to respect Lichess API limits
+                            except Exception as inner_e:
+                                print(f"Challenger: Failed to challenge {target_id}: {inner_e}")
+                                if "Too Many Requests" in str(inner_e):
+                                    print("Rate limited by Lichess! Sleeping for 15 seconds...")
+                                    time.sleep(15) # Backoff if ratelimited
+                                    break
+            except Exception as e:
+                print(f"Challenger loop error: {e}")
+                if "Too Many Requests" in str(e):
+                    time.sleep(60) # Global loop backoff on general HTTP 429
+                else:
+                    time.sleep(15) # Wait a bit on network drops
+
+
+    def start(self):
+        # Start challenger thread
+        challenger_thread = threading.Thread(target=self.run_challenger, args=(5,), daemon=True)
+        challenger_thread.start()
+        
+        while not self.stop_event.is_set():
+            print("Bot is listening for events...")
+            try:
+                for event in self.client.bots.stream_incoming_events():
+                    if self.stop_event.is_set():
+                        break
+                        
+                    if event['type'] == 'challenge':
+                        challenge = event['challenge']
+                        challenge_id = challenge['id']
+
+                        # Skip challenges that WE sent (avoid trying to accept our own)
+                        challenger_id = challenge.get('challenger', {}).get('id', '')
+                        if challenger_id == self.bot_id:
+                            continue
+
+                        if self.max_games and self.games_played >= self.max_games:
+                            print(f"Declining challenge {challenge_id} (Max games reached)")
+                            try:
+                                self.client.bots.decline_challenge(challenge_id, reason="later")
+                            except:
+                                pass
+                            continue
+                        
+                        # Check variant - Stockfish only supports standard and chess960
+                        variant = challenge.get('variant', {}).get('key', 'standard')
+                        supported_variants = {'standard', 'chess960', 'fromPosition'}
+                        
+                        if variant not in supported_variants:
+                            print(f"Declining challenge {challenge_id} (unsupported variant: {variant})")
+                            try:
+                                self.client.bots.decline_challenge(challenge_id, reason="standard")
+                            except:
+                                pass
+                            continue
+                        
+                        # Accept if it's bullet or blitz
+                        if self.is_blitz_or_bullet(challenge['timeControl']):
+                            print(f"Accepting challenge {challenge_id} (variant: {variant})")
+                            try:
+                                self.client.bots.accept_challenge(challenge_id)
+                            except Exception as e:
+                                print(f"Could not accept challenge {challenge_id}: {e}")
+                        else:
+                            print(f"Declining challenge {challenge_id} (not blitz/bullet)")
+                            try:
+                                self.client.bots.decline_challenge(challenge_id, reason="timeControl")
+                            except Exception as e:
+                                print(f"Could not decline challenge {challenge_id}: {e}")
+                            
+                    elif event['type'] == 'gameStart':
+                        self.games_played += 1
+                        game_id = event['game']['gameId']
+                        print(f"Game started: {game_id}. Canceling pending challenges... (Played: {self.games_played}/{self.max_games or 'inf'})")
+                        
+                        # Cancel all pending challenges so we don't start multiple games
+                        for pending_id in list(self.pending_challenges):
+                            try:
+                                self.client.challenges.cancel(pending_id)
+                                print(f"Canceled pending challenge {pending_id}")
+                            except Exception as e:
+                                print(f"Failed to cancel {pending_id}: {e}")
+                        self.pending_challenges.clear()
+                        
+                        # Open the game in the default browser
+                        game_url = f"https://lichess.org/{game_id}"
+                        try:
+                            webbrowser.open(game_url, new=2)
+                            print(f"Opened game in browser: {game_url}")
+                        except Exception as e:
+                            print(f"Failed to open browser: {e}")
+                        
+                        threading.Thread(target=self.handle_game, args=(game_id,), daemon=True).start()
+            except BaseException as e:
+                if self.stop_event.is_set():
+                    break
+                err_str = str(e)
+                is_rate_limited = "429" in err_str or "Too Many Requests" in err_str
+                
+                if is_rate_limited:
+                    if not hasattr(self, '_main_backoff'):
+                        self._main_backoff = 60
+                    wait = self._main_backoff
+                    self._main_backoff = min(180, self._main_backoff + 30)
+                    print(f"[!] Rate limited (429) in main loop. Backing off for {wait}s...")
+                else:
+                    wait = 30
+                    self._main_backoff = 60  # reset backoff on non-429 errors
+                    print(f"Exception in main loop/streaming: {e}")
+                    print(f"Sleeping for {wait}s before reconnecting...")
+                
+                # Sleep interruptibly
+                for _ in range(wait):
+                    if self.stop_event.is_set():
+                        break
+                    time.sleep(1)
+                    
+                try:
+                    # Try to re-init client session if token/connection went stale
+                    self.session = berserk.TokenSession(self.session.token)
+                    self.client = berserk.Client(session=self.session)
+                except:
+                    pass
+        
+        print("Bot listener stopped.")
+
+if __name__ == "__main__":
+    bot = LichessBot(LICHESS_API_TOKEN)
+    try:
+        bot.start()
+    except KeyboardInterrupt:
+        print("Shutting down...")
+        bot.stop_event.set()

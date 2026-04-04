@@ -1,0 +1,32 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Heavy Chess Files
+*.bin
+*.exe
+stockfish18/
+
+# Dependencies
+package/
+*.zip
+
+# Secrets / Settings
+.env
+settings.json
+
+# C# / .NET
+LichessBotGUI/bin/
+LichessBotGUI/obj/
+LichessBotGUI/.vs/
+LichessBotSetup/bin/
+LichessBotSetup/obj/
+LichessBotSetup/.vs/
+LichessBotSetup/Payload.zip
+
+# Build outputs
+dist/
+dist_single/
+release/
+Payload.zip
