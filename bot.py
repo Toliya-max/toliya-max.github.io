@@ -12,7 +12,6 @@ import json
 import os
 from config import LICHESS_API_TOKEN
 from engine import EngineManager
-from puzzle_solver import PuzzleSolverThread
 from eval_server import start_eval_server, update_eval
 
 # Start the evaluation microservice globally
