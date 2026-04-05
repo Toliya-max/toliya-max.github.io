@@ -137,7 +137,12 @@
                                     <Button x:Name="BtnCopy" Content="Copy Logs" Click="BtnCopy_Click" Style="{StaticResource PresetButton}" Margin="0,0,4,0"/>
                                     <Button x:Name="BtnClear" Content="Clear" Click="BtnClear_Click" Style="{StaticResource PresetButton}" Margin="4,0,0,0"/>
                                 </UniformGrid>
-                                <Button x:Name="BtnCheckUpdates" Content="Check for Updates" Click="BtnCheckUpdates_Click" Style="{StaticResource PresetButton}"/>
+                                <Button x:Name="BtnCheckUpdates" Content="Check for Updates" Click="BtnCheckUpdates_Click" Style="{StaticResource PresetButton}" Margin="0,0,0,6"/>
+
+                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,6,0,10"/>
+                                <TextBlock Text="LICENSE" FontSize="10" FontWeight="Bold" Margin="0,0,0,8" Foreground="{StaticResource TextSecondaryBrush}" Opacity="0.7"/>
+                                <Button x:Name="BtnLicense" Content="Manage License" Click="BtnLicense_Click" Style="{StaticResource PresetButton}" Margin="0,0,0,6"/>
+                                <TextBlock x:Name="LblLicenseStatus" Text="" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="2,0,0,0"/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>

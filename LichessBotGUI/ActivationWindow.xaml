@@ -1,0 +1,132 @@
+<Window x:Class="LichessBotGUI.ActivationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Lichess Bot — Activation"
+        Height="340" Width="520"
+        Background="#FF0e0d0b"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Icon="app.ico"
+        ShowInTaskbar="True">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFb58863"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFe8e6e3"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF8a8784"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#FF332f2c"/>
+        <SolidColorBrush x:Key="BgCardBrush" Color="#FF1a1816"/>
+        <SolidColorBrush x:Key="ErrorBrush" Color="#FFf85149"/>
+        <SolidColorBrush x:Key="GreenBrush" Color="#FF3FB950"/>
+
+        <Style x:Key="RoundedTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#FF1a1816"/>
+            <Setter Property="Foreground" Value="#FFe8e6e3"/>
+            <Setter Property="BorderBrush" Value="#FF332f2c"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ScrollViewer x:Name="PART_ContentHost"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#FF3c5722" Offset="0"/>
+                        <GradientStop Color="#FF4a6b2a" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground" Value="#FFe8e6e3"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="32,24,32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="♞" FontSize="28" Foreground="#FFb58863" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Lichess Bot" FontSize="18" FontWeight="Bold" Foreground="#FFe8e6e3"/>
+                <TextBlock Text="LICENSE ACTIVATION" FontSize="9" FontWeight="Bold" Foreground="#FFb58863" Opacity="0.9"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Separator -->
+        <Border Grid.Row="2" Height="1" Background="#FF332f2c"/>
+
+        <!-- Status message -->
+        <Border x:Name="StatusBorder" Grid.Row="4" CornerRadius="6" Padding="12,8"
+                Background="#FF1a1816" BorderThickness="1" BorderBrush="#FF332f2c">
+            <TextBlock x:Name="TxtStatus"
+                       Text="Enter your license key to activate Lichess Bot."
+                       Foreground="#FF8a8784" FontSize="12" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Key input label -->
+        <TextBlock Grid.Row="6" Text="License Key" FontSize="11"
+                   Foreground="#FF8a8784" Margin="0,0,0,0"/>
+
+        <!-- Key input -->
+        <TextBox x:Name="TxtKey" Grid.Row="8"
+                 Style="{StaticResource RoundedTextBox}"
+                 CharacterCasing="Upper"
+                 MaxLength="29"
+                 ToolTip="Format: XXXX-XXXX-XXXX-XXXX-XXXX"/>
+
+        <!-- Buttons row -->
+        <StackPanel Grid.Row="10" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BtnExit" Content="Exit" Width="80"
+                    Style="{StaticResource PrimaryButton}" Margin="0,0,10,0"
+                    Click="BtnExit_Click">
+                <Button.Background>
+                    <SolidColorBrush Color="#FF332f2c"/>
+                </Button.Background>
+            </Button>
+            <Button x:Name="BtnActivate" Content="Activate" Width="120"
+                    Style="{StaticResource PrimaryButton}"
+                    Click="BtnActivate_Click"
+                    IsDefault="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

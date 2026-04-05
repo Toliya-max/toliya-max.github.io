@@ -69,13 +69,122 @@ namespace LichessBotSetup
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => DragMove();
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
 
+        // ════════════════════════════════════════════
+        //  LICENSE VALIDATION
+        // ════════════════════════════════════════════
+        private record LicenseValidationResult(bool Valid, string? Info, string? Error);
+
+        private LicenseValidationResult ValidateLicenseKey(string key)
+        {
+            // Self-contained HMAC-SHA256 validation — no network, no Python.
+            // Must mirror the logic in license.py exactly.
+            try
+            {
+                string cleaned = key.Trim().ToUpperInvariant().Replace("-", "").Replace(" ", "");
+                if (cleaned.Length != 24)
+                    return new LicenseValidationResult(false, null, "Invalid key length.");
+
+                // Base32 decode
+                string padded = cleaned + new string('=', (8 - cleaned.Length % 8) % 8);
+                byte[] raw;
+                try { raw = Base32Decode(padded); }
+                catch { return new LicenseValidationResult(false, null, "Invalid key encoding."); }
+
+                if (raw.Length < 13)
+                    return new LicenseValidationResult(false, null, "Key too short.");
+
+                byte keyType = raw[0];
+                uint expiryTs = (uint)((raw[1] << 24) | (raw[2] << 16) | (raw[3] << 8) | raw[4]);
+                byte[] storedSig = new byte[8];
+                Array.Copy(raw, 5, storedSig, 0, 8);
+
+                // Compute expected HMAC-SHA256
+                byte[] secret = System.Text.Encoding.ASCII.GetBytes("L1ch355B0t$3cr3tK3y#2025!xQ7");
+                byte[] payload = new byte[5];
+                payload[0] = keyType;
+                payload[1] = (byte)(expiryTs >> 24);
+                payload[2] = (byte)(expiryTs >> 16);
+                payload[3] = (byte)(expiryTs >> 8);
+                payload[4] = (byte)(expiryTs);
+
+                byte[] fullHmac;
+                using (var hmac = new System.Security.Cryptography.HMACSHA256(secret))
+                    fullHmac = hmac.ComputeHash(payload);
+
+                byte[] expectedSig = new byte[8];
+                Array.Copy(fullHmac, 0, expectedSig, 0, 8);
+
+                if (!storedSig.SequenceEqual(expectedSig))
+                    return new LicenseValidationResult(false, null, "Key signature invalid.");
+
+                if (keyType != 0x4D && keyType != 0x59)
+                    return new LicenseValidationResult(false, null, "Unknown key type.");
+
+                var expiry = DateTimeOffset.FromUnixTimeSeconds(expiryTs).UtcDateTime;
+                if (expiry < DateTime.UtcNow)
+                    return new LicenseValidationResult(false, null, $"License expired on {expiry:yyyy-MM-dd}. Please renew.");
+
+                int daysLeft = (int)(expiry - DateTime.UtcNow).TotalDays;
+                string planName = keyType == 0x4D ? "Monthly" : "Yearly";
+                return new LicenseValidationResult(true, $"{planName} — expires {expiry:yyyy-MM-dd} ({daysLeft} days)", null);
+            }
+            catch (Exception ex)
+            {
+                return new LicenseValidationResult(false, null, $"Validation error: {ex.Message}");
+            }
+        }
+
+        private static byte[] Base32Decode(string input)
+        {
+            const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+            string s = input.TrimEnd('=');
+            int outputLen = s.Length * 5 / 8;
+            byte[] result = new byte[outputLen];
+            int buffer = 0, bitsLeft = 0, idx = 0;
+            foreach (char c in s)
+            {
+                int val = alphabet.IndexOf(c);
+                if (val < 0) throw new FormatException($"Invalid base32 char: {c}");
+                buffer = (buffer << 5) | val;
+                bitsLeft += 5;
+                if (bitsLeft >= 8)
+                {
+                    bitsLeft -= 8;
+                    result[idx++] = (byte)(buffer >> bitsLeft);
+                }
+            }
+            return result;
+        }
+
+        private void ShowLicenseStatus(string message, bool isError)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (LicenseStatusBorder == null || TxtLicenseStatus == null) return;
+                LicenseStatusBorder.Visibility = Visibility.Visible;
+                TxtLicenseStatus.Text = message;
+                if (isError)
+                {
+                    TxtLicenseStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xf8, 0x51, 0x49));
+                    LicenseStatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xc9, 0x37, 0x2c));
+                    LicenseStatusBorder.Background = new SolidColorBrush(Color.FromArgb(0x18, 0xc9, 0x37, 0x2c));
+                }
+                else
+                {
+                    TxtLicenseStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x3f, 0xb9, 0x50));
+                    LicenseStatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0x3f, 0xb9, 0x50));
+                    LicenseStatusBorder.Background = new SolidColorBrush(Color.FromArgb(0x18, 0x3f, 0xb9, 0x50));
+                }
+            });
+        }
+
         private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
         {
             BtnCheckUpdates.IsEnabled = false;
             BtnCheckUpdates.Content = "Checking...";
             try
             {
-                const string currentVersion = "1.2.1";
+                const string currentVersion = "1.3.0";
                 const string repo = "Toliya-max/lichess-bot";
 
                 using var client = new HttpClient();
@@ -287,6 +396,23 @@ namespace LichessBotSetup
         // ════════════════════════════════════════════
         private async void BtnInstall_Click(object sender, RoutedEventArgs e)
         {
+            // ── License Key Check ──
+            string licenseKey = TxtLicenseKey?.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(licenseKey))
+            {
+                ShowLicenseStatus("Please enter your license key.", isError: true);
+                return;
+            }
+
+            ShowLicenseStatus("Validating license key...", isError: false);
+            var licResult = await Task.Run(() => ValidateLicenseKey(licenseKey));
+            if (!licResult.Valid)
+            {
+                ShowLicenseStatus(licResult.Error ?? "Invalid license key.", isError: true);
+                return;
+            }
+            ShowLicenseStatus($"License valid: {licResult.Info}", isError: false);
+
             string token = TxtToken.Text.Trim();
             if (string.IsNullOrEmpty(token))
             {
@@ -765,5 +891,6 @@ $Shortcut.Save()
             SetStepActive(1);
             ShowPage("token");
         }
+
     }
 }

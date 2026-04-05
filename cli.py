@@ -13,6 +13,18 @@ import argparse
 sys.stdout.reconfigure(line_buffering=True, encoding='utf-8')
 sys.stderr.reconfigure(line_buffering=True, encoding='utf-8')
 
+def _check_license():
+    try:
+        import license as lic
+        info = lic.check()
+        print(f"[LICENSE] {info['type']} license active — expires {info['expiry']} ({info['days_left']} days left)")
+    except ImportError:
+        print("[LICENSE] WARNING: license module not found — running without license check")
+    except Exception as e:
+        print(f"[LICENSE] ERROR: {e}")
+        sys.exit(2)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Lichess Bot CLI")
     parser.add_argument("--token", type=str, default=None, help="Lichess API token (overrides .env)")
@@ -39,6 +51,8 @@ def main():
     parser.add_argument("--max-concurrent", type=int, default=1, help="Max simultaneous games (default: 1)")
     parser.add_argument("--accept-rapid", action="store_true", help="Accept rapid games up to 15 minutes (default: blitz/bullet only)")
     args = parser.parse_args()
+
+    _check_license()
 
     # Import after args parsed so config loads properly
     from config import LICHESS_API_TOKEN

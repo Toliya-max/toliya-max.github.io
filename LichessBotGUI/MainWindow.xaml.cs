@@ -67,7 +67,7 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.2.1";
+        private const string CurrentVersion = "1.3.0";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;
@@ -113,6 +113,115 @@ namespace LichessBotGUI
             LoadToken();
             WriteVersionFile();
             _ = CheckForUpdatesAsync(silent: true);
+            Loaded += MainWindow_Loaded;
+        }
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            await CheckLicenseAsync();
+        }
+
+        // ════════════════════════════════════════════
+        //  LICENSE
+        // ════════════════════════════════════════════
+
+        private string PythonPath
+        {
+            get
+            {
+                string venv = Path.Combine(BotDirectory, "venv", "Scripts", "python.exe");
+                return File.Exists(venv) ? venv : "python";
+            }
+        }
+
+        private async Task CheckLicenseAsync(bool forceShowWindow = false)
+        {
+            var result = await Task.Run(() => RunLicenseCheck());
+
+            if (result.Valid && !forceShowWindow)
+            {
+                AddLog($"[LICENSE] {result.Info}", LogCategory.System);
+                if (LblLicenseStatus != null)
+                    LblLicenseStatus.Text = result.Info ?? "Active";
+                return;
+            }
+
+            // Show activation window
+            if (!forceShowWindow && result.Error != null)
+                AddLog($"[LICENSE] {result.Error}", LogCategory.Warning);
+
+            var win = new ActivationWindow(PythonPath, BotDirectory);
+            win.Owner = this;
+            win.ShowDialog();
+
+            if (!win.IsActivated)
+            {
+                // User closed without activating — exit
+                Application.Current.Shutdown();
+                return;
+            }
+
+            // Re-check after activation
+            var recheck = await Task.Run(() => RunLicenseCheck());
+            if (recheck.Valid)
+            {
+                AddLog($"[LICENSE] {recheck.Info}", LogCategory.System);
+                if (LblLicenseStatus != null)
+                    LblLicenseStatus.Text = recheck.Info ?? "Active";
+            }
+        }
+
+        private record LicenseCheckResult(bool Valid, string? Info, string? Error);
+
+        private LicenseCheckResult RunLicenseCheck()
+        {
+            string script =
+                $"import sys; sys.path.insert(0, r'{BotDirectory}'); " +
+                "import license as L; " +
+                "info = L.check(); " +
+                "print(f\"{info['type']} — expires {info['expiry']} ({info['days_left']} days)\")";
+
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = PythonPath,
+                    Arguments = $"-c \"{script.Replace("\"", "\\\"")}\"",
+                    WorkingDirectory = BotDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+
+                using var proc = Process.Start(psi)!;
+                string stdout = proc.StandardOutput.ReadToEnd().Trim();
+                string stderr = proc.StandardError.ReadToEnd().Trim();
+                proc.WaitForExit();
+
+                if (proc.ExitCode == 0 && !string.IsNullOrEmpty(stdout))
+                    return new LicenseCheckResult(true, stdout, null);
+
+                string err = stderr;
+                if (err.Contains("LicenseError:"))
+                    err = err.Substring(err.LastIndexOf("LicenseError:") + "LicenseError:".Length).Trim();
+                else if (err.Contains("ModuleNotFoundError"))
+                    return new LicenseCheckResult(true, "License module unavailable — skipping check", null);
+                else if (string.IsNullOrEmpty(err) && proc.ExitCode != 0)
+                    err = "License check failed";
+
+                return new LicenseCheckResult(false, null, err);
+            }
+            catch (Exception ex)
+            {
+                // Python not found or other OS error — skip license check
+                return new LicenseCheckResult(true, $"License check skipped ({ex.Message})", null);
+            }
+        }
+
+        private async void BtnLicense_Click(object sender, RoutedEventArgs e)
+        {
+            await CheckLicenseAsync(forceShowWindow: true);
         }
 
         // ════════════════════════════════════════════
