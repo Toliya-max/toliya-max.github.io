@@ -90,6 +90,27 @@ dotnet build -c Release
 | `--greeting` | `glhf! 🤖` | Message sent at game start |
 | `--gg-message` | `gg wp!` | Message sent at game end |
 
+## License
+
+Lichess Bot Controller requires a valid license key to run.
+
+- **Monthly** — valid for 30 days
+- **Yearly** — valid for 365 days
+- **Developer** — no expiry (owner only)
+
+### Machine Binding
+
+The license is bound to the machine it was activated on. If you reinstall Windows or replace hardware, simply enter your key again in the Setup — it will reactivate automatically on the new machine. Your key itself remains valid until its expiry date.
+
+### Activation Flow
+
+1. Launch `LichessBotSetup.exe`
+2. Enter your license key (Step 1/2)
+3. Enter your Lichess API token (Step 2/2)
+4. Click Install
+
+Reactivation after OS reinstall: repeat the same steps with your existing key.
+
 ## Disclaimer
 
 This software operates at superhuman strength. Lichess prohibits computer assistance on human accounts. **You must upgrade your account to a BOT account before use.** Violations result in a permanent IP ban. Use at your own risk.

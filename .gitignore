@@ -16,6 +16,15 @@ package/
 .env
 settings.json
 keygen.py
+license.dat
+
+# Keygen (owner only — never publish)
+KeygenGUI/
+KeygenSetup/
+build_keygen_setup.ps1
+publish_keygen/
+publish_keygen_setup/
+dist_keygen/
 
 # C# / .NET
 LichessBotGUI/bin/
@@ -29,6 +38,13 @@ LichessBotSetup/Payload.zip
 # Build outputs
 dist/
 dist_single/
+dist_setup/
 release/
 Payload.zip
+publish/
+publish_gui_tmp/
 .claude/
+stats.json
+raw/
+wiki/
+.obsidian/

@@ -18,6 +18,7 @@ namespace LichessBotSetup
     public partial class MainWindow : Window
     {
         private readonly string _installDir;
+        private bool _isUpdateMode = false;
         private readonly HttpClient _http = new HttpClient(new HttpClientHandler()
         {
             SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13
@@ -39,6 +40,7 @@ namespace LichessBotSetup
 
             if (isUpdate)
             {
+                _isUpdateMode = true;
                 // Silent update: read existing token and go straight to install
                 string envPath = Path.Combine(_installDir, ".env");
                 string token = "";
@@ -68,6 +70,43 @@ namespace LichessBotSetup
         // ════════════════════════════════════════════
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => DragMove();
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
+
+        // ════════════════════════════════════════════
+        //  SETUP SUB-PAGE NAVIGATION
+        // ════════════════════════════════════════════
+        private void BtnNext_Click(object sender, RoutedEventArgs e)
+        {
+            string key = TxtLicenseKey?.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(key))
+            {
+                ShowLicenseStatus("Please enter your license key.", isError: true);
+                return;
+            }
+            var result = ValidateLicenseKey(key);
+            if (!result.Valid)
+            {
+                ShowLicenseStatus(result.Error ?? "Invalid license key.", isError: true);
+                return;
+            }
+            ShowLicenseStatus($"Valid: {result.Info}", isError: false);
+
+            SubPageLicense.Visibility = Visibility.Collapsed;
+            SubPageToken.Visibility = Visibility.Visible;
+            BtnCheckUpdates.Visibility = Visibility.Collapsed;
+            BtnBack.Visibility = Visibility.Visible;
+            BtnNext.Visibility = Visibility.Collapsed;
+            BtnInstall.Visibility = Visibility.Visible;
+        }
+
+        private void BtnBack_Click(object sender, RoutedEventArgs e)
+        {
+            SubPageToken.Visibility = Visibility.Collapsed;
+            SubPageLicense.Visibility = Visibility.Visible;
+            BtnBack.Visibility = Visibility.Collapsed;
+            BtnCheckUpdates.Visibility = Visibility.Visible;
+            BtnNext.Visibility = Visibility.Visible;
+            BtnInstall.Visibility = Visibility.Collapsed;
+        }
 
         // ════════════════════════════════════════════
         //  LICENSE VALIDATION
@@ -117,16 +156,19 @@ namespace LichessBotSetup
                 if (!storedSig.SequenceEqual(expectedSig))
                     return new LicenseValidationResult(false, null, "Key signature invalid.");
 
-                if (keyType != 0x4D && keyType != 0x59)
+                if (keyType != 0x4D && keyType != 0x59 && keyType != 0x44)
                     return new LicenseValidationResult(false, null, "Unknown key type.");
 
+                bool isDev = keyType == 0x44;
                 var expiry = DateTimeOffset.FromUnixTimeSeconds(expiryTs).UtcDateTime;
-                if (expiry < DateTime.UtcNow)
+                if (!isDev && expiry < DateTime.UtcNow)
                     return new LicenseValidationResult(false, null, $"License expired on {expiry:yyyy-MM-dd}. Please renew.");
 
-                int daysLeft = (int)(expiry - DateTime.UtcNow).TotalDays;
-                string planName = keyType == 0x4D ? "Monthly" : "Yearly";
-                return new LicenseValidationResult(true, $"{planName} — expires {expiry:yyyy-MM-dd} ({daysLeft} days)", null);
+                string planName = keyType == 0x4D ? "Monthly" : (keyType == 0x59 ? "Yearly" : "Developer");
+                string info = isDev
+                    ? $"{planName} — no expiry"
+                    : $"{planName} — expires {expiry:yyyy-MM-dd} ({(int)(expiry - DateTime.UtcNow).TotalDays} days)";
+                return new LicenseValidationResult(true, info, null);
             }
             catch (Exception ex)
             {
@@ -184,7 +226,7 @@ namespace LichessBotSetup
             BtnCheckUpdates.Content = "Checking...";
             try
             {
-                const string currentVersion = "1.3.0";
+                const string currentVersion = "1.4.0";
                 const string repo = "Toliya-max/lichess-bot";
 
                 using var client = new HttpClient();
@@ -396,22 +438,25 @@ namespace LichessBotSetup
         // ════════════════════════════════════════════
         private async void BtnInstall_Click(object sender, RoutedEventArgs e)
         {
-            // ── License Key Check ──
-            string licenseKey = TxtLicenseKey?.Text?.Trim() ?? "";
-            if (string.IsNullOrEmpty(licenseKey))
+            // ── License Key Check (skipped on update — key already validated at first install) ──
+            if (!_isUpdateMode)
             {
-                ShowLicenseStatus("Please enter your license key.", isError: true);
-                return;
-            }
+                string licenseKey = TxtLicenseKey?.Text?.Trim() ?? "";
+                if (string.IsNullOrEmpty(licenseKey))
+                {
+                    ShowLicenseStatus("Please enter your license key.", isError: true);
+                    return;
+                }
 
-            ShowLicenseStatus("Validating license key...", isError: false);
-            var licResult = await Task.Run(() => ValidateLicenseKey(licenseKey));
-            if (!licResult.Valid)
-            {
-                ShowLicenseStatus(licResult.Error ?? "Invalid license key.", isError: true);
-                return;
+                ShowLicenseStatus("Validating license key...", isError: false);
+                var licResult = await Task.Run(() => ValidateLicenseKey(licenseKey));
+                if (!licResult.Valid)
+                {
+                    ShowLicenseStatus(licResult.Error ?? "Invalid license key.", isError: true);
+                    return;
+                }
+                ShowLicenseStatus($"License valid: {licResult.Info}", isError: false);
             }
-            ShowLicenseStatus($"License valid: {licResult.Info}", isError: false);
 
             string token = TxtToken.Text.Trim();
             if (string.IsNullOrEmpty(token))
@@ -482,6 +527,12 @@ namespace LichessBotSetup
                 SetTaskStatus(Task3Icon, Task3Text, "active");
                 Log($"Installing to: {_installDir}");
 
+                // Preserve license.dat before wiping the directory
+                byte[]? savedLicDat = null;
+                string licDatPath = Path.Combine(_installDir, "license.dat");
+                if (File.Exists(licDatPath))
+                    savedLicDat = File.ReadAllBytes(licDatPath);
+
                 if (Directory.Exists(_installDir))
                 {
                     Log("Cleaning previous installation...");
@@ -535,6 +586,13 @@ namespace LichessBotSetup
                 string envPath = Path.Combine(_installDir, ".env");
                 File.WriteAllText(envPath, $"LICHESS_API_TOKEN={token}\n");
                 Log("API token saved.");
+
+                // Restore license.dat if it existed before the update
+                if (savedLicDat != null)
+                {
+                    File.WriteAllBytes(Path.Combine(_installDir, "license.dat"), savedLicDat);
+                    Log("License restored.");
+                }
 
                 CreateShortcut();
                 Log("Desktop shortcut created.");

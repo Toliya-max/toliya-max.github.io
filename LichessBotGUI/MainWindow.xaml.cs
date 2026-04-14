@@ -67,7 +67,7 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.3.0";
+        private const string CurrentVersion = "1.4.0";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;
@@ -156,8 +156,9 @@ namespace LichessBotGUI
 
             if (!win.IsActivated)
             {
-                // User closed without activating — exit
-                Application.Current.Shutdown();
+                // User closed without activating — exit only on mandatory initial check
+                if (!forceShowWindow)
+                    Application.Current.Shutdown();
                 return;
             }
 
