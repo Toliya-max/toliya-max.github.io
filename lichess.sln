@@ -6,6 +6,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LichessBotGUI", "LichessBot
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LichessBotSetup", "LichessBotSetup\LichessBotSetup.csproj", "{78E09DDC-0489-D409-5C15-D10F52DD9965}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeygenGUI", "KeygenGUI\KeygenGUI.csproj", "{C3D4E5F6-A1B2-4321-CDEF-1234567890AB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeygenSetup", "KeygenSetup\KeygenSetup.csproj", "{D4E5F6A7-B2C3-4321-DEFA-234567890ABC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +24,14 @@ Global
 		{78E09DDC-0489-D409-5C15-D10F52DD9965}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{78E09DDC-0489-D409-5C15-D10F52DD9965}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{78E09DDC-0489-D409-5C15-D10F52DD9965}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C3D4E5F6-A1B2-4321-CDEF-1234567890AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C3D4E5F6-A1B2-4321-CDEF-1234567890AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C3D4E5F6-A1B2-4321-CDEF-1234567890AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C3D4E5F6-A1B2-4321-CDEF-1234567890AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4E5F6A7-B2C3-4321-DEFA-234567890ABC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4E5F6A7-B2C3-4321-DEFA-234567890ABC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4E5F6A7-B2C3-4321-DEFA-234567890ABC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4E5F6A7-B2C3-4321-DEFA-234567890ABC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

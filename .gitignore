@@ -42,9 +42,15 @@ dist_setup/
 release/
 Payload.zip
 publish/
+publish_gui/
+publish_setup/
 publish_gui_tmp/
 .claude/
 stats.json
 raw/
 wiki/
 .obsidian/
+
+# Telegram bot data
+bot_data.json
+da_tokens.json

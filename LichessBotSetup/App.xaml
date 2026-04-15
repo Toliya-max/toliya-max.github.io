@@ -6,17 +6,17 @@
     <Application.Resources>
 
         <!-- ═══════════════ COLOUR PALETTE ═══════════════ -->
-        <Color x:Key="BgDark">#FF12110f</Color>
-        <Color x:Key="BgPanel">#FF1e1c19</Color>
-        <Color x:Key="BgCard">#FF252320</Color>
-        <Color x:Key="Accent">#FFb58863</Color>
-        <Color x:Key="AccentLight">#FFd4a76a</Color>
-        <Color x:Key="Green">#FF629924</Color>
-        <Color x:Key="GreenLight">#FF7eaf85</Color>
-        <Color x:Key="Red">#FFd32f2f</Color>
-        <Color x:Key="TextPrimary">#FFe8e6e3</Color>
-        <Color x:Key="TextSecondary">#FFa1a19f</Color>
-        <Color x:Key="Border">#FF3a3834</Color>
+        <Color x:Key="BgDark">#FF0e0b07</Color>
+        <Color x:Key="BgPanel">#FF241c15</Color>
+        <Color x:Key="BgCard">#FF2a2018</Color>
+        <Color x:Key="Accent">#FFd4985a</Color>
+        <Color x:Key="AccentLight">#FFe8b87a</Color>
+        <Color x:Key="Green">#FF6a9b2c</Color>
+        <Color x:Key="GreenLight">#FF8ab86a</Color>
+        <Color x:Key="Red">#FFb83828</Color>
+        <Color x:Key="TextPrimary">#FFF0ebe4</Color>
+        <Color x:Key="TextSecondary">#FFA09282</Color>
+        <Color x:Key="Border">#FF3a2c20</Color>
 
         <SolidColorBrush x:Key="BgDarkBrush" Color="{StaticResource BgDark}"/>
         <SolidColorBrush x:Key="BgPanelBrush" Color="{StaticResource BgPanel}"/>
@@ -57,7 +57,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#3a3834"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#32281f"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
@@ -90,7 +90,7 @@
         <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
             <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#c9975a"/>
+            <Setter Property="BorderBrush" Value="#e8b87a"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
@@ -99,8 +99,8 @@
                         <Border x:Name="Bd" CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#b58863" Offset="0"/>
-                                    <GradientStop Color="#c9975a" Offset="1"/>
+                                    <GradientStop Color="#d4985a" Offset="0"/>
+                                    <GradientStop Color="#e8b87a" Offset="1"/>
                                 </LinearGradientBrush>
                             </Border.Background>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -120,9 +120,9 @@
 
         <!-- ═══════════════ GREEN BUTTON ═══════════════ -->
         <Style x:Key="GreenButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="#3c5722"/>
+            <Setter Property="Background" Value="#3a5520"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#4a6b2a"/>
+            <Setter Property="BorderBrush" Value="#4e6e2a"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -130,8 +130,8 @@
                         <Border x:Name="Bd" CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#3c5722" Offset="0"/>
-                                    <GradientStop Color="#4a6b2a" Offset="1"/>
+                                    <GradientStop Color="#3a5520" Offset="0"/>
+                                    <GradientStop Color="#4e6e2a" Offset="1"/>
                                 </LinearGradientBrush>
                             </Border.Background>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -151,16 +151,16 @@
 
         <!-- ═══════════════ SECONDARY BUTTON ═══════════════ -->
         <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="#252320"/>
-            <Setter Property="Foreground" Value="#a1a19f"/>
-            <Setter Property="BorderBrush" Value="#3a3834"/>
+            <Setter Property="Background" Value="#2a2018"/>
+            <Setter Property="Foreground" Value="#A09282"/>
+            <Setter Property="BorderBrush" Value="#3a2c20"/>
         </Style>
 
         <!-- ═══════════════ RED BUTTON ═══════════════ -->
         <Style x:Key="RedButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="#5c2222"/>
-            <Setter Property="Foreground" Value="#FF8080"/>
-            <Setter Property="BorderBrush" Value="#6e2a2a"/>
+            <Setter Property="Background" Value="#4a2018"/>
+            <Setter Property="Foreground" Value="#e85040"/>
+            <Setter Property="BorderBrush" Value="#5a2820"/>
         </Style>
 
         <!-- ═══════════════ ROUNDED TEXTBOX ═══════════════ -->
@@ -200,7 +200,7 @@
             <Setter Property="Width" Value="36"/>
             <Setter Property="Height" Value="36"/>
             <Setter Property="CornerRadius" Value="18"/>
-            <Setter Property="Background" Value="#2a2826"/>
+            <Setter Property="Background" Value="#2a2018"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="2"/>
         </Style>

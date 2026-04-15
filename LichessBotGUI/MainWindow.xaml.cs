@@ -31,31 +31,31 @@ namespace LichessBotGUI
         // Colours derived from category — used directly in bindings.
         public Brush AccentStrip => Category switch
         {
-            LogCategory.Move    => new SolidColorBrush(Color.FromRgb(0xb5, 0x88, 0x63)),  // #b58863 Accent
-            LogCategory.Game    => new SolidColorBrush(Color.FromRgb(0x62, 0x99, 0x24)),  // #629924 Green
-            LogCategory.Book    => new SolidColorBrush(Color.FromRgb(0xd4, 0xa7, 0x6a)),  // #d4a76a AccentLight
-            LogCategory.Warning => new SolidColorBrush(Color.FromRgb(0xe3, 0x9a, 0x00)),  // amber
-            LogCategory.Error   => new SolidColorBrush(Color.FromRgb(0xc9, 0x37, 0x2c)),  // #c9372c Red
-            LogCategory.System  => new SolidColorBrush(Color.FromRgb(0x4a, 0x8a, 0xc4)),  // steel blue
-            _                   => new SolidColorBrush(Color.FromRgb(0x33, 0x2f, 0x2c)),  // #332f2c Border (subtle)
+            LogCategory.Move    => new SolidColorBrush(Color.FromRgb(0xd4, 0x98, 0x5a)),
+            LogCategory.Game    => new SolidColorBrush(Color.FromRgb(0x6a, 0x9b, 0x2c)),
+            LogCategory.Book    => new SolidColorBrush(Color.FromRgb(0xe8, 0xb8, 0x7a)),
+            LogCategory.Warning => new SolidColorBrush(Color.FromRgb(0xe0, 0x9a, 0x20)),
+            LogCategory.Error   => new SolidColorBrush(Color.FromRgb(0xb8, 0x38, 0x28)),
+            LogCategory.System  => new SolidColorBrush(Color.FromRgb(0x8a, 0x70, 0x50)),
+            _                   => new SolidColorBrush(Color.FromRgb(0x3a, 0x2c, 0x20)),
         };
 
         public Brush MessageColor => Category switch
         {
-            LogCategory.Move    => new SolidColorBrush(Color.FromRgb(0xe8, 0xe6, 0xe3)),  // TextPrimary
-            LogCategory.Game    => new SolidColorBrush(Color.FromRgb(0x7e, 0xaf, 0x85)),  // GreenLight
-            LogCategory.Book    => new SolidColorBrush(Color.FromRgb(0xd4, 0xa7, 0x6a)),  // AccentLight
-            LogCategory.Warning => new SolidColorBrush(Color.FromRgb(0xe3, 0x9a, 0x00)),  // amber
-            LogCategory.Error   => new SolidColorBrush(Color.FromRgb(0xf8, 0x51, 0x49)),  // RedLight
-            LogCategory.System  => new SolidColorBrush(Color.FromRgb(0x7e, 0xaf, 0xd4)),  // light steel blue
-            _                   => new SolidColorBrush(Color.FromRgb(0x8a, 0x87, 0x84)),  // TextSecondary
+            LogCategory.Move    => new SolidColorBrush(Color.FromRgb(0xf0, 0xeb, 0xe4)),
+            LogCategory.Game    => new SolidColorBrush(Color.FromRgb(0x8a, 0xb8, 0x6a)),
+            LogCategory.Book    => new SolidColorBrush(Color.FromRgb(0xe8, 0xb8, 0x7a)),
+            LogCategory.Warning => new SolidColorBrush(Color.FromRgb(0xe0, 0x9a, 0x20)),
+            LogCategory.Error   => new SolidColorBrush(Color.FromRgb(0xe8, 0x50, 0x40)),
+            LogCategory.System  => new SolidColorBrush(Color.FromRgb(0xa0, 0x88, 0x68)),
+            _                   => new SolidColorBrush(Color.FromRgb(0xa0, 0x92, 0x82)),
         };
 
         public Brush RowBackground => Category switch
         {
-            LogCategory.Error   => new SolidColorBrush(Color.FromArgb(0x18, 0xc9, 0x37, 0x2c)),
-            LogCategory.Move    => new SolidColorBrush(Color.FromArgb(0x10, 0xb5, 0x88, 0x63)),
-            LogCategory.Game    => new SolidColorBrush(Color.FromArgb(0x10, 0x62, 0x99, 0x24)),
+            LogCategory.Error   => new SolidColorBrush(Color.FromArgb(0x18, 0xb8, 0x38, 0x28)),
+            LogCategory.Move    => new SolidColorBrush(Color.FromArgb(0x0c, 0xd4, 0x98, 0x5a)),
+            LogCategory.Game    => new SolidColorBrush(Color.FromArgb(0x0c, 0x6a, 0x9b, 0x2c)),
             _                   => new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00)),
         };
 
@@ -150,7 +150,14 @@ namespace LichessBotGUI
             if (!forceShowWindow && result.Error != null)
                 AddLog($"[LICENSE] {result.Error}", LogCategory.Warning);
 
-            var win = new ActivationWindow(PythonPath, BotDirectory);
+            string currentApiToken = TxtApiToken.Text.Trim();
+            var win = new ActivationWindow(
+                PythonPath,
+                BotDirectory,
+                isManageMode: forceShowWindow,
+                currentKey: result.Key,
+                currentInfo: result.Valid ? result.Info : null,
+                currentApiToken: currentApiToken);
             win.Owner = this;
             win.ShowDialog();
 
@@ -162,7 +169,8 @@ namespace LichessBotGUI
                 return;
             }
 
-            // Re-check after activation
+            // Re-check after activation — also reload API token from .env
+            LoadToken();
             var recheck = await Task.Run(() => RunLicenseCheck());
             if (recheck.Valid)
             {
@@ -172,15 +180,17 @@ namespace LichessBotGUI
             }
         }
 
-        private record LicenseCheckResult(bool Valid, string? Info, string? Error);
+        private record LicenseCheckResult(bool Valid, string? Info, string? Error, string? Key = null);
 
         private LicenseCheckResult RunLicenseCheck()
         {
+            // Script returns: type — expires date (days)\nKEY
             string script =
                 $"import sys; sys.path.insert(0, r'{BotDirectory}'); " +
                 "import license as L; " +
                 "info = L.check(); " +
-                "print(f\"{info['type']} — expires {info['expiry']} ({info['days_left']} days)\")";
+                "print(f\"{info['type']} — expires {info['expiry']} ({info['days_left']} days)\"); " +
+                "print(info.get('key', ''))";
 
             try
             {
@@ -201,7 +211,12 @@ namespace LichessBotGUI
                 proc.WaitForExit();
 
                 if (proc.ExitCode == 0 && !string.IsNullOrEmpty(stdout))
-                    return new LicenseCheckResult(true, stdout, null);
+                {
+                    var lines = stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    string info = lines[0].Trim();
+                    string? key = lines.Length > 1 ? lines[1].Trim() : null;
+                    return new LicenseCheckResult(true, info, null, key);
+                }
 
                 string err = stderr;
                 if (err.Contains("LicenseError:"))
@@ -215,7 +230,6 @@ namespace LichessBotGUI
             }
             catch (Exception ex)
             {
-                // Python not found or other OS error — skip license check
                 return new LicenseCheckResult(true, $"License check skipped ({ex.Message})", null);
             }
         }
@@ -611,7 +625,21 @@ namespace LichessBotGUI
         {
             string clean = text.TrimEnd('\r', '\n');
             if (string.IsNullOrWhiteSpace(clean)) return;
+            if (ShouldFilterLine(clean)) return;
             AddLog(clean, ClassifyLine(clean));
+        }
+
+        private static bool ShouldFilterLine(string line)
+        {
+            string trimmed = line.Trim();
+            if (trimmed.Length == 0) return true;
+            if (trimmed.All(c => c == '=' || c == '-' || c == '~' || c == '*' || c == ' ')) return true;
+            if (trimmed.StartsWith("===") || trimmed.StartsWith("---") || trimmed.StartsWith("~~~")) return true;
+            if (trimmed.StartsWith(">>>")) return true;
+            if (trimmed.StartsWith("Traceback ")) return true;
+            if (trimmed.StartsWith("File \"") && trimmed.Contains("line ")) return true;
+            if (trimmed.Length <= 2 && !char.IsLetterOrDigit(trimmed[0])) return true;
+            return false;
         }
 
         private static LogCategory ClassifyLine(string line)
@@ -832,13 +860,11 @@ namespace LichessBotGUI
             BtnCheckUpdates.IsEnabled = true;
         }
 
+        private const string TelegramBotUrl = "https://t.me/LichessBotDownoloaderbot";
+
         private async Task CheckForUpdatesAsync(bool silent)
         {
-            // Version check via jsDelivr CDN — works even where GitHub is blocked
-            string[] checkUrls =
-            {
-                "https://gist.githubusercontent.com/Toliya-max/17c837a5b5a108b5f85b76c3d8dcf9a9/raw/version.txt",
-            };
+            string versionUrl = "https://gist.githubusercontent.com/Toliya-max/17c837a5b5a108b5f85b76c3d8dcf9a9/raw/version.txt";
 
             try
             {
@@ -846,20 +872,20 @@ namespace LichessBotGUI
                 client.Timeout = TimeSpan.FromSeconds(10);
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotGUI/1.0");
 
-                string latestVersion = "";
-                foreach (string url in checkUrls)
+                string latestVersion;
+                try
                 {
-                    try
-                    {
-                        latestVersion = (await client.GetStringAsync(url)).Trim().TrimStart('v');
-                        if (!string.IsNullOrEmpty(latestVersion)) break;
-                    }
-                    catch { }
+                    latestVersion = (await client.GetStringAsync(versionUrl)).Trim().TrimStart('v');
+                }
+                catch
+                {
+                    if (!silent) AddLog("Could not reach update server.", LogCategory.Warning);
+                    return;
                 }
 
                 if (string.IsNullOrEmpty(latestVersion))
                 {
-                    if (!silent) AddLog("Could not reach update server.", LogCategory.Warning);
+                    if (!silent) AddLog("Could not parse version.", LogCategory.Warning);
                     return;
                 }
 
@@ -871,19 +897,30 @@ namespace LichessBotGUI
 
                 AddLog($"Update available: v{latestVersion} (current: v{CurrentVersion})", LogCategory.Warning);
 
-                string downloadPage = $"https://github.com/{GithubRepo}/releases/latest";
                 var result = MessageBox.Show(
-                    $"Version v{latestVersion} is available!\n\nDownload the new installer from the releases page?",
+                    $"Update v{latestVersion} is available!\n\nOpen Telegram to download automatically?",
                     "Update Available",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Information);
 
                 if (result == MessageBoxResult.Yes)
-                    Process.Start(new ProcessStartInfo(downloadPage) { UseShellExecute = true });
+                {
+                    // Read license key and pass it via deep link for auto-verification
+                    string licenseKey = "";
+                    var licCheck = await Task.Run(() => RunLicenseCheck());
+                    if (licCheck.Valid && !string.IsNullOrEmpty(licCheck.Key))
+                        licenseKey = licCheck.Key.Replace(" ", "");
+
+                    string url = string.IsNullOrEmpty(licenseKey)
+                        ? TelegramBotUrl
+                        : $"{TelegramBotUrl}?start={licenseKey}";
+
+                    Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                }
             }
             catch (Exception ex)
             {
-                if (!silent) AddLog($"Update check error: {ex.Message}", LogCategory.Error);
+                if (!silent) AddLog($"Update error: {ex.Message}", LogCategory.Error);
             }
         }
 
@@ -1003,4 +1040,5 @@ namespace LichessBotGUI
         [System.Text.Json.Serialization.JsonPropertyName("gameId")]
         public string? GameId { get; set; }
     }
+
 }

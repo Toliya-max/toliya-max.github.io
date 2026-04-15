@@ -62,6 +62,31 @@ namespace LichessBotSetup
             {
                 BtnUninstallOnly.Visibility = Visibility.Visible;
                 AlreadyInstalledBanner.Visibility = Visibility.Visible;
+
+                // Pre-fill token and skip license if already activated
+                string existingEnv = Path.Combine(_installDir, ".env");
+                string existingLic = Path.Combine(_installDir, "license.dat");
+                if (File.Exists(existingEnv))
+                {
+                    foreach (string line in File.ReadAllLines(existingEnv))
+                    {
+                        if (line.StartsWith("LICHESS_API_TOKEN="))
+                        {
+                            TxtToken.Text = line.Substring("LICHESS_API_TOKEN=".Length).Trim();
+                            break;
+                        }
+                    }
+                }
+                if (File.Exists(existingLic) && !string.IsNullOrEmpty(TxtToken.Text))
+                {
+                    // Both license and token exist — go straight to install
+                    AlreadyInstalledBanner.Visibility = Visibility.Visible;
+                    SubPageLicense.Visibility = Visibility.Collapsed;
+                    SubPageToken.Visibility = Visibility.Visible;
+                    BtnNext.Visibility = Visibility.Collapsed;
+                    BtnInstall.Visibility = Visibility.Visible;
+                    BtnBack.Visibility = Visibility.Visible;
+                }
             }
         }
 
@@ -113,14 +138,34 @@ namespace LichessBotSetup
         // ════════════════════════════════════════════
         private record LicenseValidationResult(bool Valid, string? Info, string? Error);
 
+        // Obfuscated secrets — must match license.py exactly
+        private static readonly byte[] _mask = [
+            0x5a, 0x3f, 0x7c, 0x11, 0x88, 0xd2, 0x44, 0xab,
+            0x9e, 0x61, 0x23, 0x57, 0xf0, 0x04, 0xbc, 0x77,
+            0x31, 0xca, 0x09, 0x5b, 0xe8, 0x6f, 0xd3, 0x18,
+            0xa4, 0x72, 0xb6, 0x4d, 0x0c, 0x93, 0x2e, 0xf5,
+        ];
+        private static readonly byte[] _hsEnc = [
+             58,   3, 244, 136, 208,  32, 225, 123,
+            254,  23, 180, 147,   6,  36,  28, 109,
+             95, 164, 201,  34,  77,  41,  59, 155,
+             69,  59, 253, 148, 252, 221,  55, 234,
+        ];
+        private static byte[] GetHmacSecret()
+        {
+            var r = new byte[_hsEnc.Length];
+            for (int i = 0; i < r.Length; i++) r[i] = (byte)(_hsEnc[i] ^ _mask[i % _mask.Length]);
+            return r;
+        }
+
         private LicenseValidationResult ValidateLicenseKey(string key)
         {
-            // Self-contained HMAC-SHA256 validation — no network, no Python.
-            // Must mirror the logic in license.py exactly.
+            // Key format v2: version(1)+type(1)+expiry(4)+nonce(4)+HMAC[:14] = 24 bytes → 40 base32 chars
+            // Must mirror license.py exactly.
             try
             {
                 string cleaned = key.Trim().ToUpperInvariant().Replace("-", "").Replace(" ", "");
-                if (cleaned.Length != 24)
+                if (cleaned.Length != 40)
                     return new LicenseValidationResult(false, null, "Invalid key length.");
 
                 // Base32 decode
@@ -129,29 +174,28 @@ namespace LichessBotSetup
                 try { raw = Base32Decode(padded); }
                 catch { return new LicenseValidationResult(false, null, "Invalid key encoding."); }
 
-                if (raw.Length < 13)
+                if (raw.Length < 24)
                     return new LicenseValidationResult(false, null, "Key too short.");
 
-                byte keyType = raw[0];
-                uint expiryTs = (uint)((raw[1] << 24) | (raw[2] << 16) | (raw[3] << 8) | raw[4]);
-                byte[] storedSig = new byte[8];
-                Array.Copy(raw, 5, storedSig, 0, 8);
+                // v2 layout: [0]=version [1]=type [2:6]=expiry [6:10]=nonce [10:24]=sig
+                if (raw[0] != 0x02)
+                    return new LicenseValidationResult(false, null, "Unsupported key version.");
 
-                // Compute expected HMAC-SHA256
-                byte[] secret = System.Text.Encoding.ASCII.GetBytes("L1ch355B0t$3cr3tK3y#2025!xQ7");
-                byte[] payload = new byte[5];
-                payload[0] = keyType;
-                payload[1] = (byte)(expiryTs >> 24);
-                payload[2] = (byte)(expiryTs >> 16);
-                payload[3] = (byte)(expiryTs >> 8);
-                payload[4] = (byte)(expiryTs);
+                byte keyType = raw[1];
+                uint expiryTs = (uint)((raw[2] << 24) | (raw[3] << 16) | (raw[4] << 8) | raw[5]);
+                byte[] storedSig = new byte[14];
+                Array.Copy(raw, 10, storedSig, 0, 14);
+
+                // header = raw[0..10]
+                byte[] header = new byte[10];
+                Array.Copy(raw, 0, header, 0, 10);
 
                 byte[] fullHmac;
-                using (var hmac = new System.Security.Cryptography.HMACSHA256(secret))
-                    fullHmac = hmac.ComputeHash(payload);
+                using (var hmac = new System.Security.Cryptography.HMACSHA256(GetHmacSecret()))
+                    fullHmac = hmac.ComputeHash(header);
 
-                byte[] expectedSig = new byte[8];
-                Array.Copy(fullHmac, 0, expectedSig, 0, 8);
+                byte[] expectedSig = new byte[14];
+                Array.Copy(fullHmac, 0, expectedSig, 0, 14);
 
                 if (!storedSig.SequenceEqual(expectedSig))
                     return new LicenseValidationResult(false, null, "Key signature invalid.");
@@ -527,11 +571,15 @@ namespace LichessBotSetup
                 SetTaskStatus(Task3Icon, Task3Text, "active");
                 Log($"Installing to: {_installDir}");
 
-                // Preserve license.dat before wiping the directory
+                // Preserve license.dat and .env before wiping the directory
                 byte[]? savedLicDat = null;
+                byte[]? savedEnv = null;
                 string licDatPath = Path.Combine(_installDir, "license.dat");
+                string oldEnvPath = Path.Combine(_installDir, ".env");
                 if (File.Exists(licDatPath))
                     savedLicDat = File.ReadAllBytes(licDatPath);
+                if (File.Exists(oldEnvPath))
+                    savedEnv = File.ReadAllBytes(oldEnvPath);
 
                 if (Directory.Exists(_installDir))
                 {
@@ -584,14 +632,23 @@ namespace LichessBotSetup
                 // ── Task 6: Write .env & Create Shortcut ──
                 SetTaskStatus(Task6Icon, Task6Text, "active");
                 string envPath = Path.Combine(_installDir, ".env");
-                File.WriteAllText(envPath, $"LICHESS_API_TOKEN={token}\n");
-                Log("API token saved.");
+                if (savedEnv != null)
+                {
+                    // Restore saved .env (update — keep existing token)
+                    File.WriteAllBytes(envPath, savedEnv);
+                    Log("API token restored from previous installation.");
+                }
+                else if (!string.IsNullOrEmpty(token))
+                {
+                    File.WriteAllText(envPath, $"LICHESS_API_TOKEN={token}\n");
+                    Log("API token saved.");
+                }
 
                 // Restore license.dat if it existed before the update
                 if (savedLicDat != null)
                 {
                     File.WriteAllBytes(Path.Combine(_installDir, "license.dat"), savedLicDat);
-                    Log("License restored.");
+                    Log("License restored from previous installation.");
                 }
 
                 CreateShortcut();

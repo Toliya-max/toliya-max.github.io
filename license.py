@@ -1,9 +1,3 @@
-"""
-License validation module — Lichess Bot v2.
-Key format v2: version(1) + type(1) + expiry(4) + nonce(4) + HMAC[:14] = 24 bytes
-  → 40 base32 chars → XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX
-Machine binding: license.dat stores key + machine hash (Fernet-encrypted).
-"""
 import os
 import sys
 import json
@@ -22,7 +16,6 @@ try:
 except ImportError:
     _FERNET_AVAILABLE = False
 
-# ─── obfuscated secrets ───────────────────────────────────────────────────────
 
 def _xd(data: bytes, m: bytes) -> bytes:
     return bytes(b ^ m[i % len(m)] for i, b in enumerate(data))
@@ -34,7 +27,6 @@ _M = bytes([
     0xa4, 0x72, 0xb6, 0x4d, 0x0c, 0x93, 0x2e, 0xf5,
 ])
 
-# HMAC-SHA256 signing secret (32 bytes, XOR-obfuscated)
 _HS_ENC = bytes([
     58,  3, 244, 136, 208,  32, 225, 123,
    254,  23, 180, 147,   6,  36,  28, 109,
@@ -43,7 +35,6 @@ _HS_ENC = bytes([
 ])
 _HMAC_SECRET: bytes = _xd(_HS_ENC, _M)
 
-# Fernet key (44-byte url-safe base64, XOR-obfuscated)
 _FK_ENC = bytes([
     35,  80,  81, 100, 196, 148,  18, 221,
    243,  27,  18,  61, 194,  96, 214,  29,
@@ -54,7 +45,6 @@ _FK_ENC = bytes([
 ])
 _FERNET_KEY: bytes = _xd(_FK_ENC, _M)
 
-# Revocation list URL (GitHub Gist with JSON array of revoked key hashes)
 _REVOCATION_URL = (
     "https://gist.githubusercontent.com/Toliya-max/"
     "lichess_revoked_keys/raw/revoked.json"
@@ -62,35 +52,26 @@ _REVOCATION_URL = (
 
 _LICENSE_FILENAME = "license.dat"
 
-# ─── key format v2 ───────────────────────────────────────────────────────────
-# Raw bytes:
-#   [0]     version  = 0x02
-#   [1]     type     = ord('M') | ord('Y') | ord('D')
-#   [2:6]   expiry   = uint32 big-endian (Unix timestamp)
-#   [6:10]  nonce    = 4 random bytes
-#   [10:24] sig      = HMAC-SHA256(secret, [0:10])[:14]
-# Total: 24 bytes → base32: 40 chars → 8 groups of 5 separated by '-'
 _KEY_VERSION = 0x02
 _KEY_BYTE_LEN = 24
-_B32_LEN = 40   # ceil(24*8/5) = 38.4 → padded to 40
+_B32_LEN = 40
+
 
 def _compute_sig_v2(payload9: bytes) -> bytes:
-    """payload9 = version(1) + type(1) + expiry(4) + nonce(4)  [9 bytes total — wait, 1+1+4+4=10]"""
     return hmac.new(_HMAC_SECRET, payload9, hashlib.sha256).digest()[:14]
 
 def _encode_key(key_type: int, expiry_ts: int, nonce: bytes | None = None) -> str:
     if nonce is None:
         nonce = secrets.token_bytes(4)
-    header = struct.pack(">BBI", _KEY_VERSION, key_type, expiry_ts) + nonce  # 10 bytes
-    sig = _compute_sig_v2(header)                                              # 14 bytes
-    raw = header + sig                                                          # 24 bytes
+    header = struct.pack(">BBI", _KEY_VERSION, key_type, expiry_ts) + nonce
+    sig = _compute_sig_v2(header)
+    raw = header + sig
     b32 = base64.b32encode(raw).decode().rstrip("=")
     b32 = b32.ljust(_B32_LEN, "A")
     groups = [b32[i:i+5] for i in range(0, _B32_LEN, 5)]
     return "-".join(groups)
 
 def _decode_key(key_str: str):
-    """Returns (key_type: int, expiry: datetime) or raises ValueError."""
     cleaned = key_str.strip().upper().replace("-", "").replace(" ", "")
     if len(cleaned) != _B32_LEN:
         raise ValueError("Invalid key length")
@@ -116,16 +97,14 @@ def _decode_key(key_str: str):
     if not hmac.compare_digest(stored_sig, expected_sig):
         raise ValueError("Key signature invalid")
 
-    if key_type not in (ord("M"), ord("Y"), ord("D")):
+    if key_type not in (ord("1"), ord("W"), ord("M"), ord("Q"), ord("Y"), ord("D")):
         raise ValueError("Unknown key type")
 
     expiry_dt = datetime.datetime.utcfromtimestamp(expiry_ts)
     return key_type, expiry_dt
 
-# ─── machine binding ──────────────────────────────────────────────────────────
 
 def _get_machine_id() -> str:
-    """Returns a stable per-machine identifier (hex string)."""
     try:
         import winreg
         with winreg.OpenKey(
@@ -142,13 +121,11 @@ def _get_machine_id() -> str:
     except Exception:
         return "00000000000000000000000000000000"
 
-# ─── license file path ────────────────────────────────────────────────────────
 
 def _license_path() -> str:
     exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     return os.path.join(exe_dir, _LICENSE_FILENAME)
 
-# ─── Fernet helpers ───────────────────────────────────────────────────────────
 
 def _make_fernet():
     if not _FERNET_AVAILABLE:
@@ -159,7 +136,6 @@ def _make_fernet():
         return None
 
 def _save_license(key_str: str):
-    """Encrypts key + machine hash and writes license.dat."""
     machine_id = _get_machine_id()
     blob = f"{key_str}:{machine_id}".encode()
     f = _make_fernet()
@@ -171,7 +147,6 @@ def _save_license(key_str: str):
         fp.write(data)
 
 def _load_license() -> tuple[str, str]:
-    """Returns (key_str, saved_machine_id) or ("", "") on failure."""
     path = _license_path()
     if not os.path.exists(path):
         return "", ""
@@ -198,7 +173,6 @@ def _load_license() -> tuple[str, str]:
         key_str, machine_id = text, ""
     return key_str, machine_id
 
-# ─── revocation ───────────────────────────────────────────────────────────────
 
 def _key_hash(key_str: str) -> str:
     cleaned = key_str.strip().upper().replace("-", "")
@@ -216,13 +190,11 @@ def _is_revoked(key_str: str) -> bool:
     except Exception:
         return False
 
-# ─── public API ───────────────────────────────────────────────────────────────
 
 class LicenseError(Exception):
     pass
 
 def activate(key_str: str) -> dict:
-    """Validate key, bind to this machine, save license.dat. Returns info dict."""
     try:
         key_type, expiry = _decode_key(key_str)
     except ValueError as e:
@@ -239,7 +211,7 @@ def activate(key_str: str) -> dict:
     _save_license(key_str)
 
     days_left = -1 if is_dev else (expiry - now).days
-    type_name = {ord("M"): "Monthly", ord("Y"): "Yearly", ord("D"): "Developer"}[key_type]
+    type_name = {ord("1"): "1 Day", ord("W"): "7 Days", ord("M"): "Monthly", ord("Q"): "3 Months", ord("Y"): "Yearly", ord("D"): "Developer"}[key_type]
     return {
         "type": type_name,
         "expiry": "never" if is_dev else expiry.strftime("%Y-%m-%d"),
@@ -247,12 +219,10 @@ def activate(key_str: str) -> dict:
     }
 
 def check() -> dict:
-    """Load, verify machine binding, and validate stored license."""
     key_str, saved_mid = _load_license()
     if not key_str:
         raise LicenseError("No license key found")
 
-    # Machine binding check
     current_mid = _get_machine_id()
     if saved_mid and current_mid != saved_mid:
         raise LicenseError(
@@ -274,7 +244,7 @@ def check() -> dict:
         )
 
     days_left = -1 if is_dev else (expiry - now).days
-    type_name = {ord("M"): "Monthly", ord("Y"): "Yearly", ord("D"): "Developer"}[key_type]
+    type_name = {ord("1"): "1 Day", ord("W"): "7 Days", ord("M"): "Monthly", ord("Q"): "3 Months", ord("Y"): "Yearly", ord("D"): "Developer"}[key_type]
     return {
         "type": type_name,
         "expiry": "never" if is_dev else expiry.strftime("%Y-%m-%d"),
@@ -282,8 +252,26 @@ def check() -> dict:
         "key": key_str,
     }
 
+def validate(key_str: str) -> dict:
+    try:
+        key_type, expiry = _decode_key(key_str)
+    except ValueError as e:
+        raise LicenseError(str(e))
+
+    is_dev = key_type == ord("D")
+    now = datetime.datetime.utcnow()
+    if not is_dev and expiry < now:
+        raise LicenseError("License key has expired")
+
+    days_left = -1 if is_dev else (expiry - now).days
+    type_name = {ord("1"): "1 Day", ord("W"): "7 Days", ord("M"): "Monthly", ord("Q"): "3 Months", ord("Y"): "Yearly", ord("D"): "Developer"}[key_type]
+    return {
+        "type": type_name,
+        "expiry": "never" if is_dev else expiry.strftime("%Y-%m-%d"),
+        "days_left": days_left,
+    }
+
 def deactivate():
-    """Remove stored license."""
     path = _license_path()
     if os.path.exists(path):
         os.remove(path)

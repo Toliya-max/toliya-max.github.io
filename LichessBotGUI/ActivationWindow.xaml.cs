@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -9,24 +10,59 @@ namespace LichessBotGUI
 {
     public partial class ActivationWindow : Window
     {
-        // Set to true when activation succeeds — caller checks this.
         public bool IsActivated { get; private set; } = false;
 
-        // Path to the Python interpreter (venv or system).
         private readonly string _pythonPath;
-        // Working directory of the bot (where license.py lives).
         private readonly string _botDirectory;
+        private readonly bool _isManageMode;
+        private readonly string? _currentKey;
+        private readonly string? _currentInfo;
 
-        public ActivationWindow(string pythonPath, string botDirectory)
+        public ActivationWindow(
+            string pythonPath,
+            string botDirectory,
+            bool isManageMode = false,
+            string? currentKey = null,
+            string? currentInfo = null,
+            string? currentApiToken = null)
         {
             InitializeComponent();
             _pythonPath = pythonPath;
             _botDirectory = botDirectory;
+            _isManageMode = isManageMode;
+            _currentKey = currentKey;
+            _currentInfo = currentInfo;
+
+            if (!string.IsNullOrEmpty(currentApiToken))
+                TxtApiToken.Password = currentApiToken;
+
+            if (_isManageMode)
+                SetupManageMode();
+        }
+
+        private void SetupManageMode()
+        {
+            if (!string.IsNullOrEmpty(_currentInfo))
+                ShowStatus($"Current license: {_currentInfo}", isError: false);
+
+            if (!string.IsNullOrEmpty(_currentKey))
+                TxtKey.Text = _currentKey;
+
+            BtnActivate.Content = "Update";
+            BtnExit.Content = "Close";
         }
 
         private async void BtnActivate_Click(object sender, RoutedEventArgs e)
         {
+            string apiToken = TxtApiToken.Password.Trim();
             string key = TxtKey.Text.Trim();
+
+            if (string.IsNullOrEmpty(apiToken))
+            {
+                ShowStatus("Please enter your Lichess API token.", isError: true);
+                return;
+            }
+
             if (string.IsNullOrEmpty(key))
             {
                 ShowStatus("Please enter a license key.", isError: true);
@@ -37,6 +73,7 @@ namespace LichessBotGUI
             BtnExit.IsEnabled = false;
             ShowStatus("Validating key...", isError: false, isPending: true);
 
+            SaveApiToken(apiToken);
             var result = await Task.Run(() => RunActivation(key));
 
             BtnActivate.IsEnabled = true;
@@ -57,16 +94,41 @@ namespace LichessBotGUI
 
         private void BtnExit_Click(object sender, RoutedEventArgs e)
         {
-            Application.Current.Shutdown();
+            if (_isManageMode)
+                Close();
+            else
+                Application.Current.Shutdown();
         }
 
-        // ─── run python -c "import license; ..." ─────────────────────────────
+        private void SaveApiToken(string token)
+        {
+            string envPath = Path.Combine(_botDirectory, ".env");
+            if (!File.Exists(envPath))
+            {
+                File.WriteAllText(envPath, $"LICHESS_API_TOKEN={token}\n");
+            }
+            else
+            {
+                var lines = File.ReadAllLines(envPath).ToList();
+                bool found = false;
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    if (lines[i].StartsWith("LICHESS_API_TOKEN="))
+                    {
+                        lines[i] = $"LICHESS_API_TOKEN={token}";
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) lines.Add($"LICHESS_API_TOKEN={token}");
+                File.WriteAllLines(envPath, lines);
+            }
+        }
 
         private record ActivationResult(bool Success, string? Info, string? Error);
 
         private ActivationResult RunActivation(string key)
         {
-            // Escape single quotes in key just in case
             string safeKey = key.Replace("'", "").Replace("\"", "");
 
             string script =
@@ -96,7 +158,6 @@ namespace LichessBotGUI
                 if (proc.ExitCode == 0 && !string.IsNullOrEmpty(stdout))
                     return new ActivationResult(true, stdout, null);
 
-                // Parse LicenseError message from stderr
                 string err = stderr;
                 if (err.Contains("LicenseError:"))
                     err = err.Substring(err.LastIndexOf("LicenseError:") + "LicenseError:".Length).Trim();
@@ -111,8 +172,6 @@ namespace LichessBotGUI
             }
         }
 
-        // ─── UI helpers ───────────────────────────────────────────────────────
-
         private void ShowStatus(string message, bool isError, bool isPending = false)
         {
             Dispatcher.Invoke(() =>
@@ -120,18 +179,18 @@ namespace LichessBotGUI
                 TxtStatus.Text = message;
                 if (isError)
                 {
-                    TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xf8, 0x51, 0x49));
-                    StatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xc9, 0x37, 0x2c));
+                    TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xe8, 0x50, 0x40));
+                    StatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xb8, 0x38, 0x28));
                 }
                 else if (isPending)
                 {
-                    TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xe3, 0x9a, 0x00));
-                    StatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xe3, 0x9a, 0x00));
+                    TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xd4, 0x98, 0x5a));
+                    StatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xd4, 0x98, 0x5a));
                 }
                 else
                 {
-                    TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x3f, 0xb9, 0x50));
-                    StatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0x3f, 0xb9, 0x50));
+                    TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x6a, 0x9b, 0x2c));
+                    StatusBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0x6a, 0x9b, 0x2c));
                 }
             });
         }
