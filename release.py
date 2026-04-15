@@ -14,6 +14,8 @@ BOT_TOKEN = "REDACTED_TELEGRAM_BOT_TOKEN"
 ADMIN_IDS = [5237252950]
 TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 MAX_TG_SIZE = 49 * 1024 * 1024
+GITHUB_REPO = "Toliya-max/lichess-bot-releases"
+GH_CLI = r"C:\Program Files\GitHub CLI\gh.exe"
 
 
 def load_data():
@@ -75,10 +77,49 @@ def build(notify_chat=None):
     return True
 
 
+def github_release(version, notify_chat=None):
+    if notify_chat:
+        tg_send(notify_chat, "📦 Creating GitHub Release...")
+
+    tag = f"v{version}"
+
+    subprocess.run([GH_CLI, "release", "delete", tag, "--repo", GITHUB_REPO, "--yes"],
+                   capture_output=True, cwd=ROOT)
+
+    result = subprocess.run(
+        [GH_CLI, "release", "create", tag,
+         f"{DIST_EXE}#LichessBotSetup.exe",
+         "--repo", GITHUB_REPO,
+         "--title", tag,
+         "--notes", f"Lichess Bot Setup {tag}"],
+        capture_output=True, text=True, cwd=ROOT, timeout=600)
+
+    if result.returncode != 0:
+        err = result.stderr[-300:] if result.stderr else "unknown"
+        if notify_chat:
+            tg_send(notify_chat, f"❌ GitHub Release failed:\n<pre>{err}</pre>")
+        print(f"GitHub Release failed: {err}", file=sys.stderr)
+        return None
+
+    release_url = result.stdout.strip()
+    download_url = f"https://github.com/Toliya-max/lichess-bot-releases/releases/download/{tag}/LichessBotSetup.exe"
+
+    if notify_chat:
+        tg_send(notify_chat, f"✅ GitHub Release: {release_url}")
+    print(f"GitHub Release: {release_url}")
+    return download_url
+
+
 def upload(notify_chat=None):
     version = get_version()
     data = load_data()
     size = os.path.getsize(DIST_EXE)
+
+    dl_url = github_release(version, notify_chat)
+    if dl_url:
+        data["download_url"] = dl_url
+        data["update_version"] = version
+        save_data(data)
 
     if size < MAX_TG_SIZE:
         if notify_chat:
@@ -86,21 +127,16 @@ def upload(notify_chat=None):
         file_id = tg_upload(notify_chat or ADMIN_IDS[0], DIST_EXE,
                             caption=f"Lichess Bot Setup v{version}")
         data["update_file_id"] = file_id
-        data["update_version"] = version
         save_data(data)
         if notify_chat:
-            tg_send(notify_chat, f"✅ Uploaded! file_id cached.")
+            tg_send(notify_chat, "✅ Uploaded to Telegram!")
         print(f"Uploaded. file_id: {file_id}")
     else:
         size_mb = size / (1024 * 1024)
-        msg = (f"⚠️ Exe is {size_mb:.0f} MB (Telegram limit 50 MB).\n\n"
-               f"Send the file manually to this chat to cache it, "
-               f"or use /seturl to set a download link.")
-        if notify_chat:
-            tg_send(notify_chat, msg)
-        data["update_version"] = version
-        save_data(data)
-        print(f"Too large for Telegram ({size_mb:.0f} MB). Manual upload needed.")
+        if notify_chat and dl_url:
+            tg_send(notify_chat,
+                f"📦 Exe is {size_mb:.0f} MB — using GitHub Release link for distribution.")
+        print(f"Using GitHub Release for distribution ({size_mb:.0f} MB)")
 
 
 def notify_users(notify_chat=None):
