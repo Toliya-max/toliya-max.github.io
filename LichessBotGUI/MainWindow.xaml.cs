@@ -219,8 +219,12 @@ namespace LichessBotGUI
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
+                    StandardOutputEncoding = System.Text.Encoding.UTF8,
+                    StandardErrorEncoding = System.Text.Encoding.UTF8,
                     CreateNoWindow = true,
                 };
+                psi.Environment["PYTHONIOENCODING"] = "utf-8";
+                psi.Environment["PYTHONUTF8"] = "1";
 
                 using var proc = Process.Start(psi)!;
                 string stdout = proc.StandardOutput.ReadToEnd().Trim();
@@ -308,8 +312,12 @@ namespace LichessBotGUI
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
+                    StandardOutputEncoding = System.Text.Encoding.UTF8,
+                    StandardErrorEncoding = System.Text.Encoding.UTF8,
                     CreateNoWindow = true,
                 };
+                psi.Environment["PYTHONIOENCODING"] = "utf-8";
+                psi.Environment["PYTHONUTF8"] = "1";
 
                 _botProcess = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 _botProcess.OutputDataReceived += OnOutputData;
