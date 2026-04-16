@@ -745,21 +745,13 @@ namespace LichessBotSetup
                 SetTaskStatus(Task3Icon, Task3Text, "done");
                 SetProgress(50);
 
-                // ── Task 4 + 5: Engine & Python in parallel ──
-                SetTaskStatus(Task4Icon, Task4Text, "active");
-                SetTaskStatus(Task5Icon, Task5Text, "active");
+                // ── Task 4: skipped - engine downloads on first bot launch ──
+                SetTaskStatus(Task4Icon, Task4Text, "skip");
+                Dispatcher.Invoke(() => Task4Text.Text = "Engine: downloaded on first launch");
+                SetProgress(55);
 
-                var engineTask = Task.Run(async () =>
-                {
-                    var t = System.Diagnostics.Stopwatch.StartNew();
-                    await DownloadStockfishEngine();
-                    Dispatcher.Invoke(() =>
-                    {
-                        Log($"[timing] stockfish task: {t.ElapsedMilliseconds} ms");
-                        SetTaskStatus(Task4Icon, Task4Text, "done");
-                        SetProgress(65);
-                    });
-                });
+                // ── Task 5: Python ──
+                SetTaskStatus(Task5Icon, Task5Text, "active");
 
                 var pythonTask = Task.Run(async () =>
                 {
@@ -795,8 +787,8 @@ namespace LichessBotSetup
                     });
                 });
 
-                await Task.WhenAll(engineTask, pythonTask);
-                Mark("stockfish + python+pip parallel");
+                await pythonTask;
+                Mark("python+pip");
                 SetProgress(90);
 
                 // ── Task 6: Write .env & Create Shortcut ──

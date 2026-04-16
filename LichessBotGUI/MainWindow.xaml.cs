@@ -274,9 +274,132 @@ namespace LichessBotGUI
         }
 
         // ════════════════════════════════════════════
+        //  STOCKFISH ENGINE (lazy download on first start)
+        // ════════════════════════════════════════════
+        private const string StockfishUrl =
+            "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-windows-x86-64-avx2.zip";
+
+        private string EngineCacheDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "LichessBot-cache", "stockfish");
+
+        private async Task<bool> EnsureEngineAsync()
+        {
+            string engineDir = Path.Combine(BotDirectory, "stockfish18");
+            if (Directory.Exists(engineDir) &&
+                Directory.GetFiles(engineDir, "stockfish*.exe", SearchOption.AllDirectories).Length > 0)
+            {
+                return true;
+            }
+
+            if (Directory.Exists(EngineCacheDir))
+            {
+                var cached = Directory.GetFiles(EngineCacheDir, "stockfish*.exe");
+                if (cached.Length > 0)
+                {
+                    Directory.CreateDirectory(engineDir);
+                    foreach (var src in cached)
+                    {
+                        string dst = Path.Combine(engineDir, Path.GetFileName(src));
+                        File.Copy(src, dst, overwrite: true);
+                    }
+                    AppendLog($"[ENGINE] Restored from cache ({cached[0]})");
+                    return true;
+                }
+            }
+
+            AppendLog("[ENGINE] Stockfish not found, downloading...");
+            SetStatus("Downloading engine", "#FFB58863");
+
+            string zipPath = Path.Combine(Path.GetTempPath(), "lichess_stockfish.zip");
+            string tempExtract = Path.Combine(Path.GetTempPath(), "lichess_stockfish_tmp");
+            if (Directory.Exists(tempExtract))
+            {
+                try { Directory.Delete(tempExtract, true); } catch { }
+            }
+
+            try
+            {
+                using var http = new System.Net.Http.HttpClient();
+                http.Timeout = TimeSpan.FromMinutes(10);
+                using var response = await http.GetAsync(StockfishUrl,
+                    System.Net.Http.HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                long total = response.Content.Headers.ContentLength ?? -1;
+                using var src = await response.Content.ReadAsStreamAsync();
+                using var dst = new FileStream(zipPath, FileMode.Create, FileAccess.Write,
+                                               FileShare.None, 81920);
+                byte[] buf = new byte[81920];
+                long got = 0;
+                int lastPct = -5;
+                int read;
+                while ((read = await src.ReadAsync(buf, 0, buf.Length)) > 0)
+                {
+                    await dst.WriteAsync(buf, 0, read);
+                    got += read;
+                    if (total > 0)
+                    {
+                        int pct = (int)(got * 100 / total);
+                        if (pct - lastPct >= 5)
+                        {
+                            lastPct = pct;
+                            AppendLog($"[ENGINE] {pct}%  ({got / 1024 / 1024}MB / {total / 1024 / 1024}MB)");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[ENGINE] Download failed: {ex.Message}");
+                SetStatus("Stopped", "#FFD32F2F");
+                return false;
+            }
+
+            try
+            {
+                AppendLog("[ENGINE] Extracting...");
+                System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, tempExtract);
+                Directory.CreateDirectory(engineDir);
+                var sub = Directory.GetDirectories(tempExtract);
+                string root = sub.Length > 0 ? sub[0] : tempExtract;
+                foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    string rel = Path.GetRelativePath(root, file);
+                    string to = Path.Combine(engineDir, rel);
+                    Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                    File.Move(file, to, true);
+                }
+                try { File.Delete(zipPath); } catch { }
+                try { Directory.Delete(tempExtract, true); } catch { }
+
+                try
+                {
+                    Directory.CreateDirectory(EngineCacheDir);
+                    foreach (var exe in Directory.GetFiles(engineDir, "stockfish*.exe",
+                                                           SearchOption.AllDirectories))
+                    {
+                        string dst = Path.Combine(EngineCacheDir, Path.GetFileName(exe));
+                        File.Copy(exe, dst, overwrite: true);
+                    }
+                    AppendLog($"[ENGINE] Cached to {EngineCacheDir}");
+                }
+                catch (Exception ex) { AppendLog($"[ENGINE] Cache save failed: {ex.Message}"); }
+
+                AppendLog("[ENGINE] Ready.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[ENGINE] Extract failed: {ex.Message}");
+                SetStatus("Stopped", "#FFD32F2F");
+                return false;
+            }
+        }
+
+        // ════════════════════════════════════════════
         //  START / STOP
         // ════════════════════════════════════════════
-        private void BtnStart_Click(object sender, RoutedEventArgs e)
+        private async void BtnStart_Click(object sender, RoutedEventArgs e)
         {
             if (_isRunning) return;
 
@@ -286,6 +409,26 @@ namespace LichessBotGUI
                 MessageBox.Show(
                     $"cli.py not found at:\n{cliPath}\n\nPlease reinstall the bot using the latest Setup.",
                     "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            BtnStart.IsEnabled = false;
+            try
+            {
+                bool engineReady = await EnsureEngineAsync();
+                if (!engineReady)
+                {
+                    MessageBox.Show(
+                        "Could not prepare the chess engine. Check your internet connection and try again.",
+                        "Engine Missing", MessageBoxButton.OK, MessageBoxImage.Error);
+                    BtnStart.IsEnabled = true;
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[ENGINE] {ex.Message}");
+                BtnStart.IsEnabled = true;
                 return;
             }
 
