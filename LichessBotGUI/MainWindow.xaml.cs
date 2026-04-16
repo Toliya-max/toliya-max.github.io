@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -116,6 +117,7 @@ namespace LichessBotGUI
             LoadSettings();
             LoadToken();
             WriteVersionFile();
+            SyncTimerPresetFromValues();
             Loaded += MainWindow_Loaded;
         }
 
@@ -1133,11 +1135,43 @@ namespace LichessBotGUI
         // ════════════════════════════════════════════
         //  UI PRESETS
         // ════════════════════════════════════════════
+        private Button[] TimerPresetButtons => new[]
+        {
+            BtnPresetBullet, BtnPresetBlitz, BtnPresetRapid,
+            BtnPresetHyper, BtnPresetClassical, BtnPresetCustom,
+        };
+
+        private void SelectTimerPreset(Button selected)
+        {
+            foreach (var b in TimerPresetButtons)
+                b.Tag = b == selected ? "selected" : null;
+        }
+
+        private void SyncTimerPresetFromValues()
+        {
+            string mins = (TxtMinutes?.Text ?? "").Trim().Replace(',', '.');
+            string inc = (TxtIncrement?.Text ?? "").Trim();
+            Button? match = (mins, inc) switch
+            {
+                ("0.5", "0") => BtnPresetHyper,
+                ("1",   "0") => BtnPresetBullet,
+                ("3",   "0") => BtnPresetBlitz,
+                ("10",  "0") => BtnPresetRapid,
+                ("15", "10") => BtnPresetClassical,
+                _            => null,
+            };
+            if (match != null)
+                SelectTimerPreset(match);
+            else if (!string.IsNullOrEmpty(mins))
+                SelectTimerPreset(BtnPresetCustom);
+        }
+
         private void BtnPresetBullet_Click(object sender, RoutedEventArgs e)
         {
             CustomTimePanel.Visibility = Visibility.Collapsed;
             TxtMinutes.Text = "1";
             TxtIncrement.Text = "0";
+            SelectTimerPreset(BtnPresetBullet);
             AppendLog("⚡ Preset loaded: Bullet 1+0\n");
         }
 
@@ -1146,6 +1180,7 @@ namespace LichessBotGUI
             CustomTimePanel.Visibility = Visibility.Collapsed;
             TxtMinutes.Text = "3";
             TxtIncrement.Text = "0";
+            SelectTimerPreset(BtnPresetBlitz);
             AppendLog("⏱ Preset loaded: Blitz 3+0\n");
         }
 
@@ -1154,6 +1189,7 @@ namespace LichessBotGUI
             CustomTimePanel.Visibility = Visibility.Collapsed;
             TxtMinutes.Text = "10";
             TxtIncrement.Text = "0";
+            SelectTimerPreset(BtnPresetRapid);
             AppendLog("🐢 Preset loaded: Rapid 10+0\n");
         }
 
@@ -1162,6 +1198,7 @@ namespace LichessBotGUI
             CustomTimePanel.Visibility = Visibility.Collapsed;
             TxtMinutes.Text = "0.5";
             TxtIncrement.Text = "0";
+            SelectTimerPreset(BtnPresetHyper);
             AddActivity("💥 Preset loaded: HyperBullet 0.5+0");
         }
 
@@ -1170,6 +1207,7 @@ namespace LichessBotGUI
             CustomTimePanel.Visibility = Visibility.Collapsed;
             TxtMinutes.Text = "15";
             TxtIncrement.Text = "10";
+            SelectTimerPreset(BtnPresetClassical);
             AddActivity("🏛 Preset loaded: Classical 15+10");
         }
 
@@ -1178,6 +1216,7 @@ namespace LichessBotGUI
             CustomTimePanel.Visibility = Visibility.Visible;
             TxtMinutes.Text = "";
             TxtIncrement.Text = "";
+            SelectTimerPreset(BtnPresetCustom);
             AddActivity("✏ Custom mode — enter your own time control values");
         }
 

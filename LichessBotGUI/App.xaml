@@ -150,6 +150,12 @@
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
+                <Trigger Property="Tag" Value="selected">
+                    <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                    <Setter Property="Foreground" Value="#FFFFFFFF"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Trigger>
                 <EventTrigger RoutedEvent="MouseEnter">
                     <BeginStoryboard>
                         <Storyboard>
