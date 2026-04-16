@@ -41,6 +41,28 @@ foreach ($f in $pyFiles) {
 # setup ZIP small enough for Telegram auto-upload (~49 MB limit).
 Write-Host "  Stockfish skipped - installer will download at install time" -ForegroundColor Yellow
 
+# Bundle Python wheels so pip install runs offline in seconds
+Write-Host "  Downloading wheels for requirements.txt..." -ForegroundColor Cyan
+$wheelDir = "$tempPayload\wheels"
+New-Item -ItemType Directory -Force -Path $wheelDir | Out-Null
+$pipArgs = @(
+    "-m", "pip", "download",
+    "-r", "$root\requirements.txt",
+    "-d", $wheelDir,
+    "--platform", "win_amd64",
+    "--python-version", "3.12",
+    "--only-binary", ":all:",
+    "-q"
+)
+& python @pipArgs
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  Wheel bundling failed - installer will fall back to PyPI" -ForegroundColor Yellow
+    Remove-Item $wheelDir -Recurse -Force -ErrorAction SilentlyContinue
+} else {
+    $wheelCount = (Get-ChildItem $wheelDir -File).Count
+    Write-Host "  Bundled $wheelCount wheel(s)" -ForegroundColor Green
+}
+
 Compress-Archive -Path "$tempPayload\*" -DestinationPath $zipDest -CompressionLevel Optimal
 Remove-Item $tempPayload -Recurse -Force
 

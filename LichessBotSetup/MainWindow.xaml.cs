@@ -596,8 +596,18 @@ namespace LichessBotSetup
             SetProgress(0);
             TxtLog.Text = "";
 
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            long lastMark = 0;
+            void Mark(string label)
+            {
+                long now = sw.ElapsedMilliseconds;
+                Log($"[+{now - lastMark} ms] {label} (total {now} ms)");
+                lastMark = now;
+            }
+
             // Kill any running instances before install
             KillOldProcesses();
+            Mark("kill old processes");
 
             try
             {
@@ -623,6 +633,7 @@ namespace LichessBotSetup
                 }
 
                 Log($"Authenticated as: {username}");
+                Mark("lichess token check");
                 SetTaskStatus(Task1Icon, Task1Text, "done");
                 SetProgress(15);
 
@@ -730,6 +741,7 @@ namespace LichessBotSetup
                     }
                 }
                 Log("Files extracted.");
+                Mark("payload extract + restore");
                 SetTaskStatus(Task3Icon, Task3Text, "done");
                 SetProgress(50);
 
@@ -739,12 +751,19 @@ namespace LichessBotSetup
 
                 var engineTask = Task.Run(async () =>
                 {
+                    var t = System.Diagnostics.Stopwatch.StartNew();
                     await DownloadStockfishEngine();
-                    Dispatcher.Invoke(() => { SetTaskStatus(Task4Icon, Task4Text, "done"); SetProgress(65); });
+                    Dispatcher.Invoke(() =>
+                    {
+                        Log($"[timing] stockfish task: {t.ElapsedMilliseconds} ms");
+                        SetTaskStatus(Task4Icon, Task4Text, "done");
+                        SetProgress(65);
+                    });
                 });
 
                 var pythonTask = Task.Run(async () =>
                 {
+                    var t = System.Diagnostics.Stopwatch.StartNew();
                     Dispatcher.Invoke(() => Log("Checking for Python..."));
                     if (!await IsPythonInstalled())
                     {
@@ -758,6 +777,7 @@ namespace LichessBotSetup
                     {
                         Dispatcher.Invoke(() => Log("Python found."));
                     }
+                    long tPython = t.ElapsedMilliseconds;
                     if (await ArePipRequirementsSatisfiedAsync(_installDir))
                     {
                         Dispatcher.Invoke(() => Log("Python packages already satisfied - skipping pip"));
@@ -767,10 +787,16 @@ namespace LichessBotSetup
                         Dispatcher.Invoke(() => Log("Installing Python packages..."));
                         await InstallPipRequirementsAsync(_installDir);
                     }
-                    Dispatcher.Invoke(() => { SetTaskStatus(Task5Icon, Task5Text, "done"); SetProgress(85); });
+                    Dispatcher.Invoke(() =>
+                    {
+                        Log($"[timing] python+pip task: {t.ElapsedMilliseconds} ms (python: {tPython} ms, pip: {t.ElapsedMilliseconds - tPython} ms)");
+                        SetTaskStatus(Task5Icon, Task5Text, "done");
+                        SetProgress(85);
+                    });
                 });
 
                 await Task.WhenAll(engineTask, pythonTask);
+                Mark("stockfish + python+pip parallel");
                 SetProgress(90);
 
                 // ── Task 6: Write .env & Create Shortcut ──
@@ -802,8 +828,10 @@ namespace LichessBotSetup
                 SetTaskStatus(Task6Icon, Task6Text, "done");
                 SetProgress(100);
 
+                Mark("shortcut + registry + .env");
+
                 // ── DONE ──
-                Log("Installation complete!");
+                Log($"Installation complete in {sw.ElapsedMilliseconds} ms!");
                 await Task.Delay(600);
 
                 SetStepActive(3);
@@ -1033,9 +1061,26 @@ namespace LichessBotSetup
         {
             TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
 
+            string wheelsDir = Path.Combine(installDir, "wheels");
+            bool hasWheels = Directory.Exists(wheelsDir) &&
+                             Directory.EnumerateFiles(wheelsDir, "*.whl").Any();
+
+            string args;
+            if (hasWheels)
+            {
+                args = $"-m pip install --no-index --find-links \"{wheelsDir}\" " +
+                       "--disable-pip-version-check -q -r requirements.txt";
+                Log($"Using bundled wheels from {wheelsDir}");
+            }
+            else
+            {
+                args = "-m pip install --prefer-binary --disable-pip-version-check " +
+                       "-q -r requirements.txt";
+            }
+
             Process p = new Process();
             p.StartInfo.FileName = "python";
-            p.StartInfo.Arguments = "-m pip install --prefer-binary --disable-pip-version-check -q -r requirements.txt";
+            p.StartInfo.Arguments = args;
             p.StartInfo.WorkingDirectory = installDir;
             p.StartInfo.UseShellExecute = false;
             p.StartInfo.CreateNoWindow = true;
