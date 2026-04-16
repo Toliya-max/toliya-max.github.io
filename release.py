@@ -37,6 +37,66 @@ def get_version():
     return "unknown"
 
 
+def _git(*args):
+    try:
+        r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True,
+                           text=True, encoding="utf-8", timeout=15)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+CHANGELOG_SKIP_PATTERNS = (
+    "bump ", "merge ", "release ", "tag ",
+)
+
+
+def get_changelog(version, max_chars=600, max_items=10):
+    prev_tag = _git("describe", "--tags", "--abbrev=0", f"v{version}^") or \
+               _git("describe", "--tags", "--abbrev=0", "HEAD^")
+    rng = f"{prev_tag}..HEAD" if prev_tag else "-20"
+    raw = _git("log", rng, "--pretty=format:%s") if prev_tag else \
+          _git("log", "-20", "--pretty=format:%s")
+    if not raw:
+        return ""
+    lines = []
+    for line in raw.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        low = s.lower()
+        if any(low.startswith(p) for p in CHANGELOG_SKIP_PATTERNS):
+            continue
+        lines.append(s)
+        if len(lines) >= max_items:
+            break
+    if not lines:
+        return ""
+    bullets = "\n".join(f"• {l}" for l in lines)
+    if len(bullets) > max_chars:
+        bullets = bullets[:max_chars - 3].rstrip() + "..."
+    return bullets
+
+
+def create_tag(version):
+    tag = f"v{version}"
+    if _git("rev-parse", "-q", "--verify", f"refs/tags/{tag}"):
+        print(f"Tag {tag} already exists")
+        return True
+    r = subprocess.run(["git", "tag", tag], cwd=ROOT,
+                       capture_output=True, text=True, timeout=15)
+    if r.returncode != 0:
+        print(f"git tag failed: {r.stderr.strip()}")
+        return False
+    r = subprocess.run(["git", "push", "origin", tag], cwd=ROOT,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        print(f"git push tag failed: {r.stderr.strip()}")
+        return False
+    print(f"Tagged and pushed {tag}")
+    return True
+
+
 def tg_send(chat_id, text):
     requests.post(f"{TG_API}/sendMessage", json={
         "chat_id": chat_id, "text": text, "parse_mode": "HTML"})
@@ -153,10 +213,18 @@ def upload(notify_chat=None):
 
     data["update_version"] = version
     data.pop("download_url", None)
+
+    changelog = get_changelog(version)
+    if changelog:
+        data["update_changelog"] = changelog
+    else:
+        data.pop("update_changelog", None)
     save_data(data)
 
     target = notify_chat or ADMIN_IDS[0]
-    caption = f"Lichess Bot Setup v{version}"
+    caption = f"<b>Lichess Bot Setup v{version}</b>"
+    if changelog:
+        caption += f"\n\n<b>What's new:</b>\n{changelog}"
     file_id = None
 
     if size < MAX_TG_SIZE:
@@ -184,16 +252,21 @@ def upload(notify_chat=None):
 def notify_users(notify_chat=None):
     data = load_data()
     version = data.get("update_version", "?")
+    changelog = data.get("update_changelog", "") or ""
     users = data.get("verified_users", {})
     sent, failed = 0, 0
+
+    body = f"🆕 <b>Update v{version} available!</b>"
+    if changelog:
+        body += f"\n\n<b>What's new:</b>\n{changelog}"
+    body += "\n\nPress <b>📥 Get Update</b> to download."
 
     for cid_str in users:
         cid = int(cid_str)
         if cid in ADMIN_IDS:
             continue
         try:
-            tg_send(cid, f"🆕 <b>Update v{version} available!</b>\n\n"
-                         f"Press <b>📥 Get Update</b> to download.")
+            tg_send(cid, body)
             sent += 1
         except Exception:
             failed += 1
@@ -205,6 +278,10 @@ def notify_users(notify_chat=None):
 
 
 def full_release(notify_chat=None):
+    version = get_version()
+    if not create_tag(version):
+        if notify_chat:
+            tg_send(notify_chat, f"⚠️ Could not create git tag v{version}. Continuing.")
     if not build(notify_chat):
         return False
     upload(notify_chat)

@@ -125,7 +125,13 @@ _SETUP_INSTRUCTIONS = (
 def _send_setup(chat_id, version=None):
     fid = data.get("update_file_id")
     ver = version or data.get("update_version", "latest")
-    caption = f"Lichess Bot Setup v{ver}\n\n{_SETUP_INSTRUCTIONS}"
+    changelog = data.get("update_changelog") or ""
+    caption = f"<b>Lichess Bot Setup v{ver}</b>"
+    if changelog:
+        caption += f"\n\n<b>What's new:</b>\n{changelog}"
+    caption += f"\n\n{_SETUP_INSTRUCTIONS}"
+    if len(caption) > 1020:
+        caption = caption[:1017] + "..."
 
     if fid:
         try:
@@ -752,6 +758,7 @@ def btn_check_version(m):
 
     ver = data.get("update_version")
     fid = data.get("update_file_id")
+    changelog = data.get("update_changelog") or ""
 
     if not ver:
         bot.send_message(cid, "No version info available yet.", reply_markup=main_kb(cid))
@@ -761,11 +768,12 @@ def btn_check_version(m):
     if fid:
         kb.add(types.InlineKeyboardButton("📥 Download", callback_data="dl_update"))
 
-    bot.send_message(cid,
-        f"🔄 <b>Latest version: v{ver}</b>\n\n"
-        f"Check the version on your PC (shown in the app title bar).\n"
-        f"If it doesn't match — download the update below.",
-        reply_markup=kb)
+    text = f"🔄 <b>Latest version: v{ver}</b>"
+    if changelog:
+        text += f"\n\n<b>What's new:</b>\n{changelog}"
+    text += ("\n\nCheck the version on your PC (shown in the app title bar). "
+             "If it doesn't match - download the update below.")
+    bot.send_message(cid, text, reply_markup=kb)
 
 @bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("reply_"))
 def cb_reply(c):
