@@ -102,13 +102,25 @@ def tg_send(chat_id, text):
         "chat_id": chat_id, "text": text, "parse_mode": "HTML"})
 
 
+def tg_delete_message(chat_id, message_id):
+    if not chat_id or not message_id:
+        return
+    try:
+        requests.post(f"{TG_API}/deleteMessage",
+                      json={"chat_id": chat_id, "message_id": message_id},
+                      timeout=10)
+    except Exception:
+        pass
+
+
 def tg_upload(chat_id, file_path, caption=""):
     with open(file_path, "rb") as f:
         r = requests.post(f"{TG_API}/sendDocument",
                           data={"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"},
                           files={"document": (os.path.basename(file_path), f)})
     r.raise_for_status()
-    return r.json()["result"]["document"]["file_id"]
+    result = r.json()["result"]
+    return result["document"]["file_id"], result.get("message_id")
 
 
 def tg_send_url(chat_id, url, caption=""):
@@ -127,7 +139,6 @@ def tg_send_url(chat_id, url, caption=""):
 
 def tg_upload_stream(chat_id, file_path, caption=""):
     try:
-        size = os.path.getsize(file_path)
         with open(file_path, "rb") as f:
             r = requests.post(
                 f"{TG_API}/sendDocument",
@@ -136,11 +147,11 @@ def tg_upload_stream(chat_id, file_path, caption=""):
                 timeout=600)
         data = r.json()
         if data.get("ok") and data["result"].get("document"):
-            return data["result"]["document"]["file_id"]
+            return data["result"]["document"]["file_id"], data["result"].get("message_id")
         print(f"Stream upload failed: {data.get('description', 'unknown')}")
     except Exception as e:
         print(f"Stream upload error: {e}")
-    return None
+    return None, None
 
 
 def tg_upload_large(chat_id, file_path, caption=""):
@@ -180,9 +191,6 @@ def tg_upload_large(chat_id, file_path, caption=""):
 
 
 def build(notify_chat=None):
-    if notify_chat:
-        tg_send(notify_chat, "🔨 Building LichessBotSetup...")
-
     result = subprocess.run(
         ["powershell", "-ExecutionPolicy", "Bypass", "-File", BUILD_SCRIPT],
         cwd=ROOT, capture_output=True, text=True, timeout=300)
@@ -195,13 +203,9 @@ def build(notify_chat=None):
         return False
 
     if not os.path.exists(DIST_FILE):
-        if notify_chat:
-            tg_send(notify_chat, "❌ Build produced no output.")
         return False
 
     size_mb = os.path.getsize(DIST_FILE) / (1024 * 1024)
-    if notify_chat:
-        tg_send(notify_chat, f"✅ Build OK — {size_mb:.1f} MB")
     print(f"Build OK: {DIST_FILE} ({size_mb:.1f} MB)")
     return True
 
@@ -219,33 +223,35 @@ def upload(notify_chat=None):
         data["update_changelog"] = changelog
     else:
         data.pop("update_changelog", None)
-    save_data(data)
 
     target = notify_chat or ADMIN_IDS[0]
+
+    prev_chat = data.get("update_chat_id")
+    prev_msg = data.get("update_message_id")
+    if prev_chat and prev_msg:
+        tg_delete_message(prev_chat, prev_msg)
+
+    save_data(data)
+
     caption = f"<b>Lichess Bot Setup v{version}</b>"
     if changelog:
         caption += f"\n\n<b>What's new:</b>\n{changelog}"
     file_id = None
+    msg_id = None
 
     if size < MAX_TG_SIZE:
-        if notify_chat:
-            tg_send(notify_chat, "📤 Uploading to Telegram...")
-        file_id = tg_upload(target, DIST_FILE, caption=caption)
+        file_id, msg_id = tg_upload(target, DIST_FILE, caption=caption)
 
     if not file_id:
-        if notify_chat:
-            tg_send(notify_chat, "📤 Streaming upload (large file)...")
-        file_id = tg_upload_stream(target, DIST_FILE, caption=caption)
+        file_id, msg_id = tg_upload_stream(target, DIST_FILE, caption=caption)
 
     if file_id:
         data["update_file_id"] = file_id
+        data["update_message_id"] = msg_id
+        data["update_chat_id"] = target
         save_data(data)
-        if notify_chat:
-            tg_send(notify_chat, "✅ file_id cached! All users will get it instantly.")
         print(f"Uploaded. file_id: {file_id}")
     else:
-        if notify_chat:
-            tg_send(notify_chat, "⚠️ Auto-upload failed. Send the file manually to this chat.")
         print("Upload failed")
 
 
@@ -279,15 +285,11 @@ def notify_users(notify_chat=None):
 
 def full_release(notify_chat=None):
     version = get_version()
-    if not create_tag(version):
-        if notify_chat:
-            tg_send(notify_chat, f"⚠️ Could not create git tag v{version}. Continuing.")
+    create_tag(version)
     if not build(notify_chat):
         return False
     upload(notify_chat)
     notify_users(notify_chat)
-    if notify_chat:
-        tg_send(notify_chat, "🎉 <b>Release complete!</b>")
     return True
 
 
