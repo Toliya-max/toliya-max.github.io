@@ -283,6 +283,34 @@ namespace LichessBotGUI
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "LichessBot-cache", "stockfish");
 
+        private void ShowWinToast(string title, string body, int timeoutMs = 6000)
+        {
+            try
+            {
+                string safeTitle = title.Replace("'", "''").Replace("\"", "");
+                string safeBody = body.Replace("'", "''").Replace("\"", "");
+                string ps =
+                    "[void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime];" +
+                    "[void][Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom.XmlDocument,ContentType=WindowsRuntime];" +
+                    "$x=New-Object Windows.Data.Xml.Dom.XmlDocument;" +
+                    $"$x.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>{safeTitle}</text><text>{safeBody}</text></binding></visual></toast>');" +
+                    "$t=[Windows.UI.Notifications.ToastNotification]::new($x);" +
+                    "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Lichess Bot').Show($t);";
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -NonInteractive -WindowStyle Hidden -Command \"{ps}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[TOAST] {ex.Message}");
+            }
+        }
+
         private async Task<bool> EnsureEngineAsync()
         {
             string engineDir = Path.Combine(BotDirectory, "stockfish18");
@@ -310,6 +338,9 @@ namespace LichessBotGUI
 
             AppendLog("[ENGINE] Stockfish not found, downloading...");
             SetStatus("Downloading engine", "#FFB58863");
+            ShowWinToast("Lichess Bot",
+                "Downloading chess engine (~77 MB). This runs in the background and happens only once.",
+                8000);
 
             string zipPath = Path.Combine(Path.GetTempPath(), "lichess_stockfish.zip");
             string tempExtract = Path.Combine(Path.GetTempPath(), "lichess_stockfish_tmp");
@@ -386,6 +417,7 @@ namespace LichessBotGUI
                 catch (Exception ex) { AppendLog($"[ENGINE] Cache save failed: {ex.Message}"); }
 
                 AppendLog("[ENGINE] Ready.");
+                ShowWinToast("Lichess Bot", "Chess engine ready. Starting the bot.", 5000);
                 return true;
             }
             catch (Exception ex)
