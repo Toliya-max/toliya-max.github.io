@@ -528,7 +528,12 @@ namespace LichessBotSetup
                 }
                 catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
                 {
-                    Log($"Delete attempt {attempt}/{maxAttempts} failed: {ex.Message}. Killing holders...");
+                    Log($"Delete attempt {attempt}/{maxAttempts} failed: {ex.Message}");
+
+                    int killedRm = 0;
+                    try { killedRm = RestartManager.KillLockers(path, Log); } catch { }
+                    if (killedRm > 0) Log($"Restart Manager terminated {killedRm} locking process(es)");
+
                     KillBotProcesses(ownedOnly: attempt <= 2);
                     await Task.Delay(400 * attempt);
                 }
