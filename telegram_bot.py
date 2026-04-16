@@ -78,20 +78,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 DA_POLL_INTERVAL = 15
-VERSION_CHECK_INTERVAL = 10 * 60
-GITHUB_RELEASES_REPO = "Toliya-max/lichess-bot"
 SETUP_ASSET_NAME = "LichessBotSetup.zip"
-
-_GH_TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gh_token.txt")
-def _get_gh_token():
-    tok = os.environ.get("LICHESS_GH_TOKEN") or os.environ.get("GH_TOKEN") or ""
-    if tok:
-        return tok.strip()
-    if os.path.exists(_GH_TOKEN_FILE):
-        with open(_GH_TOKEN_FILE, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    return ""
-GH_TOKEN = _get_gh_token()
 PROCESSED_DONATIONS_MAX = 500
 PENDING_MATCH_TTL = 24 * 3600
 PENDING_PAYMENT_TTL = 24 * 3600
@@ -161,66 +148,10 @@ def _send_setup(chat_id, version=None):
                 _save_data(data)
             return True
 
-    downloaded = _download_release_asset_sync()
-    if downloaded:
-        try:
-            with open(downloaded, "rb") as f:
-                result = bot.send_document(chat_id, f, caption=caption,
-                                            visible_file_name=SETUP_ASSET_NAME)
-                data["update_file_id"] = result.document.file_id
-                data["update_version"] = ver
-                _save_data(data)
-            return True
-        finally:
-            try: os.remove(downloaded)
-            except Exception: pass
-
     bot.send_message(chat_id,
-        f"⚠️ <b>Setup v{ver} not deliverable right now.</b>\n"
-        f"Contact support.")
+        f"⚠️ <b>Setup v{ver} not available right now.</b>\n"
+        f"Ask admin to re-run <code>python release.py</code>.")
     return False
-
-def _download_release_asset_sync():
-    if not GH_TOKEN:
-        log.warning("[ASSET] no GH_TOKEN; cannot download private release asset")
-        return None
-    import httpx
-    ver = data.get("update_version") or "latest"
-    tmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), f".setup_tmp_{ver}.zip")
-    try:
-        with httpx.Client(trust_env=False, timeout=120.0,
-                          proxy=DA_PROXY if DA_PROXY else None,
-                          follow_redirects=True) as c:
-            url = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/latest"
-            r = c.get(url, headers={
-                "Authorization": f"Bearer {GH_TOKEN}",
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "LichessBotTelegram/1.0",
-            })
-            r.raise_for_status()
-            info = r.json()
-            asset_id = None
-            for a in info.get("assets") or []:
-                if a.get("name") == SETUP_ASSET_NAME:
-                    asset_id = a.get("id")
-                    break
-            if asset_id is None:
-                log.error("[ASSET] asset not found in latest release")
-                return None
-            asset_url = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/assets/{asset_id}"
-            r = c.get(asset_url, headers={
-                "Authorization": f"Bearer {GH_TOKEN}",
-                "Accept": "application/octet-stream",
-                "User-Agent": "LichessBotTelegram/1.0",
-            })
-            r.raise_for_status()
-            with open(tmp, "wb") as f:
-                f.write(r.content)
-        log.info(f"[ASSET] downloaded {tmp} ({os.path.getsize(tmp)} bytes)")
-        return tmp
-    except Exception as e:
-        log.exception("[ASSET] download failed")
-        return None
 
 def _load_data():
     if os.path.exists(DATA_FILE):
@@ -1422,90 +1353,6 @@ async def _token_keeper():
             log.error(f"[TOKEN] keeper error: {e}")
         await asyncio.sleep(6 * 3600)
 
-def _parse_version(v):
-    if not v:
-        return (0, 0, 0)
-    v = str(v).lstrip("v").strip()
-    parts = []
-    for p in v.split("."):
-        num = ""
-        for ch in p:
-            if ch.isdigit():
-                num += ch
-            else:
-                break
-        parts.append(int(num) if num else 0)
-    while len(parts) < 3:
-        parts.append(0)
-    return tuple(parts[:3])
-
-async def _fetch_latest_release():
-    if not GH_TOKEN:
-        log.warning("[VERSION] GH_TOKEN not set; private repo cannot be queried")
-        return None, None
-    url = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/latest"
-    headers = {
-        "User-Agent": "LichessBotTelegram/1.0",
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GH_TOKEN}",
-    }
-    async with _http_client(timeout=30.0) as c:
-        r = await c.get(url, headers=headers)
-        if r.status_code == 404:
-            return None, None
-        r.raise_for_status()
-        info = r.json()
-    tag = (info.get("tag_name") or "").lstrip("v")
-    asset_id = None
-    for a in info.get("assets") or []:
-        if a.get("name") == SETUP_ASSET_NAME:
-            asset_id = a.get("id")
-            break
-    if not tag or asset_id is None:
-        return None, None
-    asset_api = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/assets/{asset_id}"
-    return tag, asset_api
-
-async def _version_watcher():
-    log.info("[VERSION] watcher started")
-    while True:
-        try:
-            tag, asset_url = await _fetch_latest_release()
-            if tag:
-                current = data.get("update_version") or ""
-                if _parse_version(tag) > _parse_version(current):
-                    log.info(f"[VERSION] new release detected: {current} -> {tag}")
-                    data["update_version"] = tag
-                    data["download_url"] = asset_url
-                    data["update_file_id"] = None
-                    _save_data(data)
-                    _broadcast_update(tag)
-                else:
-                    log.info(f"[VERSION] up-to-date: {current}")
-        except Exception as e:
-            log.error(f"[VERSION] watcher error: {e}")
-        await asyncio.sleep(VERSION_CHECK_INTERVAL)
-
-def _broadcast_update(version):
-    users = data.get("verified_users", {})
-    sent = failed = 0
-    for cid_str in list(users.keys()):
-        try:
-            cid = int(cid_str)
-        except ValueError:
-            continue
-        try:
-            bot.send_message(cid,
-                f"🆕 <b>Update v{version} available!</b>\n\n"
-                f"Press <b>📥 Get Update</b> to download.",
-                reply_markup=main_kb(cid))
-            sent += 1
-        except Exception:
-            failed += 1
-    log.info(f"[VERSION] broadcast v{version}: sent={sent} failed={failed}")
-    _notify_admins_bg(
-        f"🆕 <b>Auto-detected new release v{version}</b>\n"
-        f"Notified {sent} users (failed: {failed}).")
 
 async def listen_donations():
     import websockets
@@ -1635,7 +1482,7 @@ async def poll_donations_rest():
         await asyncio.sleep(DA_POLL_INTERVAL)
 
 async def _run_ws_with_keeper():
-    await asyncio.gather(listen_donations(), _token_keeper(), _version_watcher())
+    await asyncio.gather(listen_donations(), _token_keeper())
 
 def _run_da():
     loop = asyncio.new_event_loop()
