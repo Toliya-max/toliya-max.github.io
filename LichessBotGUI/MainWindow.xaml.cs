@@ -560,7 +560,6 @@ namespace LichessBotGUI
                         LblGamesBottom.Text = sub.TrimEnd(')');
                     }
                     
-                    // Parse Eval from log lines like "Engine selected move: e2e4 (Eval: +0.45)"
                     if (e.Data.Contains("(Eval: "))
                     {
                         try
@@ -573,33 +572,58 @@ namespace LichessBotGUI
                             {
                                 string evalStr = e.Data.Substring(evalIdx, colorIdx - evalIdx);
                                 string colorStr = e.Data.Substring(colorIdx + 10, endIdx - (colorIdx + 10)).Trim();
-                                
-                                double eval = 0;
+
+                                bool isBotWhite = string.Equals(colorStr, "white", StringComparison.OrdinalIgnoreCase);
+
+                                double whiteEval = 0;
                                 bool isMate = false;
+                                int? mateIn = null;
+                                bool mateForWhite = false;
 
                                 if (evalStr.StartsWith("M") || evalStr.StartsWith("-M"))
                                 {
                                     isMate = true;
-                                    LblEval.Text = evalStr;
-                                    eval = evalStr.StartsWith("-") ? -10 : 10;
+                                    mateForWhite = !evalStr.StartsWith("-");
+                                    string num = evalStr.TrimStart('-').Substring(1);
+                                    if (int.TryParse(num, out int mv)) mateIn = mv;
+                                    whiteEval = mateForWhite ? 10 : -10;
                                 }
-                                else if (double.TryParse(evalStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedEval))
+                                else if (double.TryParse(evalStr,
+                                    System.Globalization.NumberStyles.Any,
+                                    System.Globalization.CultureInfo.InvariantCulture,
+                                    out double parsedEval))
                                 {
-                                    eval = parsedEval;
-                                    LblEval.Text = (eval > 0 ? "+" : "") + eval.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                                    whiteEval = parsedEval;
                                 }
 
-                                double displayEval = eval;
+                                double botEval = isBotWhite ? whiteEval : -whiteEval;
 
-                                // Cap eval to [-10, +10] for the bar visuals
-                                double clamped = Math.Max(-10, Math.Min(10, displayEval));
-                                
-                                // Map -10 to 0% fill, +10 to 100% fill
-                                double fillPct = (clamped + 10) / 20.0 * 100.0;
-                                double emptyPct = 100.0 - fillPct;
-                                
-                                EvalWhiteCol.Width = new GridLength(fillPct, GridUnitType.Star);
-                                EvalBlackCol.Width = new GridLength(emptyPct, GridUnitType.Star);
+                                if (isMate)
+                                {
+                                    bool mateForBot = (isBotWhite == mateForWhite);
+                                    int n = mateIn ?? 0;
+                                    LblEval.Text = (mateForBot ? "+#" : "-#") + n;
+                                }
+                                else
+                                {
+                                    LblEval.Text = (botEval >= 0 ? "+" : "")
+                                        + botEval.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                                }
+
+                                double clamped = Math.Max(-10, Math.Min(10, botEval));
+                                double selfPct = (clamped + 10) / 20.0 * 100.0;
+                                double oppPct = 100.0 - selfPct;
+
+                                if (isBotWhite)
+                                {
+                                    EvalWhiteCol.Width = new GridLength(selfPct, GridUnitType.Star);
+                                    EvalBlackCol.Width = new GridLength(oppPct, GridUnitType.Star);
+                                }
+                                else
+                                {
+                                    EvalBlackCol.Width = new GridLength(selfPct, GridUnitType.Star);
+                                    EvalWhiteCol.Width = new GridLength(oppPct, GridUnitType.Star);
+                                }
                             }
                         }
                         catch { }
