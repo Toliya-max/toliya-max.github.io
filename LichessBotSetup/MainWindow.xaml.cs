@@ -652,7 +652,6 @@ namespace LichessBotSetup
                 SetTaskStatus(Task3Icon, Task3Text, "active");
                 Log($"Installing to: {_installDir}");
 
-                // Preserve license.dat and .env before wiping the directory
                 byte[]? savedLicDat = null;
                 byte[]? savedEnv = null;
                 string licDatPath = Path.Combine(_installDir, "license.dat");
@@ -666,8 +665,36 @@ namespace LichessBotSetup
                 KillBotProcesses();
                 await Task.Delay(500);
 
+                string? stockfishBak = null;
+                string? venvBak = null;
+                string? settingsBak = null;
+                string sfSrc = Path.Combine(_installDir, "stockfish18");
+                string venvSrc = Path.Combine(_installDir, "venv");
+                string settingsSrc = Path.Combine(_installDir, "settings.json");
+
                 if (Directory.Exists(_installDir))
                 {
+                    if (Directory.Exists(sfSrc))
+                    {
+                        stockfishBak = Path.Combine(Path.GetTempPath(),
+                            "lichess_sf_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+                        try { Directory.Move(sfSrc, stockfishBak); Log("Reusing Stockfish engine from previous install"); }
+                        catch (Exception ex) { Log($"Stockfish backup skipped: {ex.Message}"); stockfishBak = null; }
+                    }
+                    if (Directory.Exists(venvSrc))
+                    {
+                        venvBak = Path.Combine(Path.GetTempPath(),
+                            "lichess_venv_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+                        try { Directory.Move(venvSrc, venvBak); Log("Reusing venv from previous install"); }
+                        catch (Exception ex) { Log($"venv backup skipped: {ex.Message}"); venvBak = null; }
+                    }
+                    if (File.Exists(settingsSrc))
+                    {
+                        settingsBak = settingsSrc + ".bak";
+                        try { File.Copy(settingsSrc, settingsBak, overwrite: true); }
+                        catch { settingsBak = null; }
+                    }
+
                     Log("Cleaning previous installation...");
                     if (!await ForceDeleteDirectoryAsync(_installDir))
                         throw new Exception(
@@ -675,6 +702,22 @@ namespace LichessBotSetup
                             "Close all Lichess Bot processes in Task Manager or reboot, then try again.");
                 }
                 Directory.CreateDirectory(_installDir);
+
+                if (stockfishBak != null && Directory.Exists(stockfishBak))
+                {
+                    try { Directory.Move(stockfishBak, sfSrc); }
+                    catch (Exception ex) { Log($"Could not restore Stockfish: {ex.Message}"); }
+                }
+                if (venvBak != null && Directory.Exists(venvBak))
+                {
+                    try { Directory.Move(venvBak, venvSrc); }
+                    catch (Exception ex) { Log($"Could not restore venv: {ex.Message}"); }
+                }
+                if (settingsBak != null && File.Exists(settingsBak))
+                {
+                    try { File.Move(settingsBak, settingsSrc, overwrite: true); }
+                    catch { }
+                }
 
                 Log("Extracting application files...");
                 var assembly = Assembly.GetExecutingAssembly();
@@ -715,8 +758,15 @@ namespace LichessBotSetup
                     {
                         Dispatcher.Invoke(() => Log("Python found."));
                     }
-                    Dispatcher.Invoke(() => Log("Installing Python packages..."));
-                    await InstallPipRequirementsAsync(_installDir);
+                    if (await ArePipRequirementsSatisfiedAsync(_installDir))
+                    {
+                        Dispatcher.Invoke(() => Log("Python packages already satisfied - skipping pip"));
+                    }
+                    else
+                    {
+                        Dispatcher.Invoke(() => Log("Installing Python packages..."));
+                        await InstallPipRequirementsAsync(_installDir);
+                    }
                     Dispatcher.Invoke(() => { SetTaskStatus(Task5Icon, Task5Text, "done"); SetProgress(85); });
                 });
 
@@ -942,13 +992,50 @@ namespace LichessBotSetup
             Log("Python installed!");
         }
 
+        private async Task<bool> ArePipRequirementsSatisfiedAsync(string installDir)
+        {
+            string reqPath = Path.Combine(installDir, "requirements.txt");
+            if (!File.Exists(reqPath)) return true;
+
+            var tcs = new TaskCompletionSource<bool>();
+            Process p = new Process();
+            p.StartInfo.FileName = "python";
+            p.StartInfo.Arguments = "-m pip install --dry-run --no-deps --quiet -r requirements.txt";
+            p.StartInfo.WorkingDirectory = installDir;
+            p.StartInfo.UseShellExecute = false;
+            p.StartInfo.CreateNoWindow = true;
+            p.StartInfo.RedirectStandardOutput = true;
+            p.StartInfo.RedirectStandardError = true;
+            p.EnableRaisingEvents = true;
+
+            bool wouldInstall = false;
+            p.OutputDataReceived += (s, e) => { if (e.Data != null && e.Data.Contains("Would install", StringComparison.OrdinalIgnoreCase)) wouldInstall = true; };
+            p.ErrorDataReceived += (s, e) => { };
+            p.Exited += (s, e) => tcs.SetResult(p.ExitCode == 0 && !wouldInstall);
+
+            try
+            {
+                p.Start();
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+            }
+            catch
+            {
+                return false;
+            }
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(15000));
+            if (completed != tcs.Task) { try { p.Kill(true); } catch { } return false; }
+            return await tcs.Task;
+        }
+
         private Task InstallPipRequirementsAsync(string installDir)
         {
             TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
 
             Process p = new Process();
             p.StartInfo.FileName = "python";
-            p.StartInfo.Arguments = "-m pip install --no-cache-dir --prefer-binary -q -r requirements.txt";
+            p.StartInfo.Arguments = "-m pip install --prefer-binary --disable-pip-version-check -q -r requirements.txt";
             p.StartInfo.WorkingDirectory = installDir;
             p.StartInfo.UseShellExecute = false;
             p.StartInfo.CreateNoWindow = true;
