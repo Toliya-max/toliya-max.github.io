@@ -2,12 +2,13 @@ import os
 import sys
 import json
 import subprocess
+import asyncio
 import requests
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(ROOT, "bot_data.json")
 VERSION_FILE = os.path.join(ROOT, "version.txt")
-DIST_EXE = os.path.join(ROOT, "dist", "LichessBotSetup.exe")
+DIST_FILE = os.path.join(ROOT, "dist", "LichessBotSetup.zip")
 BUILD_SCRIPT = os.path.join(ROOT, "build_setup.ps1")
 
 BOT_TOKEN = "REDACTED_TELEGRAM_BOT_TOKEN"
@@ -16,6 +17,8 @@ TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 MAX_TG_SIZE = 49 * 1024 * 1024
 GITHUB_REPO = "Toliya-max/lichess-bot-releases"
 GH_CLI = r"C:\Program Files\GitHub CLI\gh.exe"
+
+TG_SESSION = os.path.join(ROOT, "tg_bot.session")
 
 
 def load_data():
@@ -50,6 +53,74 @@ def tg_upload(chat_id, file_path, caption=""):
     return r.json()["result"]["document"]["file_id"]
 
 
+def tg_send_url(chat_id, url, caption=""):
+    try:
+        r = requests.post(f"{TG_API}/sendDocument", json={
+            "chat_id": chat_id, "document": url,
+            "caption": caption, "parse_mode": "HTML"}, timeout=300)
+        data = r.json()
+        if data.get("ok") and data["result"].get("document"):
+            return data["result"]["document"]["file_id"]
+        print(f"URL send failed: {data.get('description', 'unknown')}")
+    except Exception as e:
+        print(f"URL send error: {e}")
+    return None
+
+
+def tg_upload_stream(chat_id, file_path, caption=""):
+    try:
+        size = os.path.getsize(file_path)
+        with open(file_path, "rb") as f:
+            r = requests.post(
+                f"{TG_API}/sendDocument",
+                data={"chat_id": str(chat_id), "caption": caption, "parse_mode": "HTML"},
+                files={"document": (os.path.basename(file_path), f, "application/octet-stream")},
+                timeout=600)
+        data = r.json()
+        if data.get("ok") and data["result"].get("document"):
+            return data["result"]["document"]["file_id"]
+        print(f"Stream upload failed: {data.get('description', 'unknown')}")
+    except Exception as e:
+        print(f"Stream upload error: {e}")
+    return None
+
+
+def tg_upload_large(chat_id, file_path, caption=""):
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+
+    api_id = 6
+    api_hash = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
+
+    async def _upload():
+        client = TelegramClient(TG_SESSION, api_id, api_hash)
+        await client.start(bot_token=BOT_TOKEN)
+        result = await client.send_file(
+            chat_id, file_path,
+            caption=caption,
+            parse_mode="html",
+            force_document=True)
+        file_id = None
+        if result.document:
+            r = requests.post(f"{TG_API}/getFile",
+                              json={"file_id": str(result.document.id)})
+        await client.disconnect()
+        return result
+
+    loop = asyncio.new_event_loop()
+    msg = loop.run_until_complete(_upload())
+    loop.close()
+
+    bot_msg = requests.post(f"{TG_API}/forwardMessage", json={
+        "chat_id": chat_id, "from_chat_id": chat_id,
+        "message_id": msg.id}).json()
+
+    if bot_msg.get("ok") and bot_msg["result"].get("document"):
+        return bot_msg["result"]["document"]["file_id"]
+
+    return None
+
+
 def build(notify_chat=None):
     if notify_chat:
         tg_send(notify_chat, "🔨 Building LichessBotSetup...")
@@ -65,15 +136,15 @@ def build(notify_chat=None):
         print(f"BUILD FAILED:\n{result.stderr}", file=sys.stderr)
         return False
 
-    if not os.path.exists(DIST_EXE):
+    if not os.path.exists(DIST_FILE):
         if notify_chat:
             tg_send(notify_chat, "❌ Build produced no output.")
         return False
 
-    size_mb = os.path.getsize(DIST_EXE) / (1024 * 1024)
+    size_mb = os.path.getsize(DIST_FILE) / (1024 * 1024)
     if notify_chat:
         tg_send(notify_chat, f"✅ Build OK — {size_mb:.1f} MB")
-    print(f"Build OK: {DIST_EXE} ({size_mb:.1f} MB)")
+    print(f"Build OK: {DIST_FILE} ({size_mb:.1f} MB)")
     return True
 
 
@@ -88,7 +159,7 @@ def github_release(version, notify_chat=None):
 
     result = subprocess.run(
         [GH_CLI, "release", "create", tag,
-         f"{DIST_EXE}#LichessBotSetup.exe",
+         f"{DIST_FILE}#LichessBotSetup.zip",
          "--repo", GITHUB_REPO,
          "--title", tag,
          "--notes", f"Lichess Bot Setup {tag}"],
@@ -102,7 +173,7 @@ def github_release(version, notify_chat=None):
         return None
 
     release_url = result.stdout.strip()
-    download_url = f"https://github.com/Toliya-max/lichess-bot-releases/releases/download/{tag}/LichessBotSetup.exe"
+    download_url = f"https://github.com/Toliya-max/lichess-bot-releases/releases/download/{tag}/LichessBotSetup.zip"
 
     if notify_chat:
         tg_send(notify_chat, f"✅ GitHub Release: {release_url}")
@@ -113,7 +184,7 @@ def github_release(version, notify_chat=None):
 def upload(notify_chat=None):
     version = get_version()
     data = load_data()
-    size = os.path.getsize(DIST_EXE)
+    size = os.path.getsize(DIST_FILE)
 
     dl_url = github_release(version, notify_chat)
     if dl_url:
@@ -121,22 +192,34 @@ def upload(notify_chat=None):
         data["update_version"] = version
         save_data(data)
 
+    target = notify_chat or ADMIN_IDS[0]
+    caption = f"Lichess Bot Setup v{version}"
+    file_id = None
+
     if size < MAX_TG_SIZE:
         if notify_chat:
             tg_send(notify_chat, "📤 Uploading to Telegram...")
-        file_id = tg_upload(notify_chat or ADMIN_IDS[0], DIST_EXE,
-                            caption=f"Lichess Bot Setup v{version}")
+        file_id = tg_upload(target, DIST_FILE, caption=caption)
+    elif dl_url:
+        if notify_chat:
+            tg_send(notify_chat, "📤 Sending via GitHub URL...")
+        file_id = tg_send_url(target, dl_url, caption=caption)
+
+    if not file_id:
+        if notify_chat:
+            tg_send(notify_chat, "📤 Uploading in chunks via streaming...")
+        file_id = tg_upload_stream(target, DIST_FILE, caption=caption)
+
+    if file_id:
         data["update_file_id"] = file_id
         save_data(data)
         if notify_chat:
-            tg_send(notify_chat, "✅ Uploaded to Telegram!")
+            tg_send(notify_chat, "✅ file_id cached! All users will get it instantly.")
         print(f"Uploaded. file_id: {file_id}")
     else:
-        size_mb = size / (1024 * 1024)
-        if notify_chat and dl_url:
-            tg_send(notify_chat,
-                f"📦 Exe is {size_mb:.0f} MB — using GitHub Release link for distribution.")
-        print(f"Using GitHub Release for distribution ({size_mb:.0f} MB)")
+        if notify_chat:
+            tg_send(notify_chat, "⚠️ Auto-upload failed. Send the file manually to this chat.")
+        print("Upload failed")
 
 
 def notify_users(notify_chat=None):

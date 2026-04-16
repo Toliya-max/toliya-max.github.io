@@ -80,7 +80,7 @@ log = logging.getLogger(__name__)
 DA_POLL_INTERVAL = 15
 VERSION_CHECK_INTERVAL = 10 * 60
 GITHUB_RELEASES_REPO = "Toliya-max/lichess-bot-releases"
-SETUP_ASSET_NAME = "LichessBotSetup.exe"
+SETUP_ASSET_NAME = "LichessBotSetup.zip"
 PROCESSED_DONATIONS_MAX = 500
 PENDING_MATCH_TTL = 24 * 3600
 PENDING_PAYMENT_TTL = 24 * 3600
@@ -106,23 +106,36 @@ def verify_key(key_str):
     except L.LicenseError:
         return None
 
-SETUP_EXE_PATHS = [
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "LichessBotSetup.exe"),
+SETUP_FILE_PATHS = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "LichessBotSetup.zip"),
 ]
 
 def _find_local_setup():
-    for p in SETUP_EXE_PATHS:
+    for p in SETUP_FILE_PATHS:
         if os.path.exists(p):
             return p
     return None
 
+_SETUP_INSTRUCTIONS = (
+    "📦 <b>How to install:</b>\n"
+    "1. Right-click the ZIP → <b>Extract all</b>\n"
+    "2. Open the extracted <b>LichessBotSetup</b> folder\n"
+    "3. Double-click <b>LichessBotSetup.exe</b>\n"
+    "4. Confirm the UAC prompt → follow the installer"
+)
+
 def _send_setup(chat_id, version=None):
     fid = data.get("update_file_id")
     ver = version or data.get("update_version", "latest")
+    caption = f"Lichess Bot Setup v{ver}\n\n{_SETUP_INSTRUCTIONS}"
 
     if fid:
-        bot.send_document(chat_id, fid, caption=f"Lichess Bot Setup v{ver}")
-        return True
+        try:
+            bot.send_document(chat_id, fid, caption=caption)
+            return True
+        except Exception as e:
+            log.warning(f"send via file_id failed ({e}), falling back")
+            data["update_file_id"] = None
 
     local = _find_local_setup()
     if local:
@@ -130,7 +143,7 @@ def _send_setup(chat_id, version=None):
         if size_mb <= 49:
             with open(local, "rb") as f:
                 fname = os.path.basename(local)
-                result = bot.send_document(chat_id, f, caption=f"Lichess Bot Setup v{ver}",
+                result = bot.send_document(chat_id, f, caption=caption,
                                             visible_file_name=fname)
                 data["update_file_id"] = result.document.file_id
                 data["update_version"] = ver
@@ -140,9 +153,9 @@ def _send_setup(chat_id, version=None):
     dl_url = data.get("download_url")
     if dl_url:
         kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("📥 Download Setup", url=dl_url))
+        kb.add(types.InlineKeyboardButton("📥 Download ZIP", url=dl_url))
         bot.send_message(chat_id,
-            f"📦 <b>Lichess Bot Setup v{ver}</b>\n\nClick below to download:",
+            f"📦 <b>Lichess Bot Setup v{ver}</b>\n\n{_SETUP_INSTRUCTIONS}",
             reply_markup=kb)
         return True
 
