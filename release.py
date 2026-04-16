@@ -255,24 +255,53 @@ def upload(notify_chat=None):
         print("Upload failed")
 
 
+def tg_send_doc_by_id(chat_id, file_id, caption):
+    try:
+        r = requests.post(f"{TG_API}/sendDocument", json={
+            "chat_id": chat_id,
+            "document": file_id,
+            "caption": caption,
+            "parse_mode": "HTML",
+        }, timeout=30)
+        return r.ok and r.json().get("ok")
+    except Exception:
+        return False
+
+
 def notify_users(notify_chat=None):
     data = load_data()
     version = data.get("update_version", "?")
     changelog = data.get("update_changelog", "") or ""
+    file_id = data.get("update_file_id")
     users = data.get("verified_users", {})
-    sent, failed = 0, 0
+    sent, failed, skipped = 0, 0, 0
 
-    body = f"🆕 <b>Update v{version} available!</b>"
+    caption = f"🆕 <b>Update v{version} available!</b>"
     if changelog:
-        body += f"\n\n<b>What's new:</b>\n{changelog}"
-    body += "\n\nPress <b>📥 Get Update</b> to download."
+        caption += f"\n\n<b>What's new:</b>\n{changelog}"
+    caption += ("\n\nExtract the ZIP and run <b>LichessBotSetup.exe</b> "
+                "to upgrade. Your license and settings are preserved.")
+    if len(caption) > 1020:
+        caption = caption[:1017] + "..."
+
+    fallback_text = (f"🆕 <b>Update v{version} available!</b>\n\n"
+                     f"Press <b>📥 Get Update</b> to download.")
 
     for cid_str in users:
-        cid = int(cid_str)
+        try:
+            cid = int(cid_str)
+        except ValueError:
+            skipped += 1
+            continue
         if cid in ADMIN_IDS:
+            skipped += 1
             continue
         try:
-            tg_send(cid, body)
+            ok = False
+            if file_id:
+                ok = tg_send_doc_by_id(cid, file_id, caption)
+            if not ok:
+                tg_send(cid, fallback_text)
             sent += 1
         except Exception:
             failed += 1

@@ -19,7 +19,7 @@
                 <DockPanel>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="♞" Foreground="#d4985a" FontSize="20" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Lichess Bot Setup" Foreground="#F0ebe4" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TitleVersion" Text="Lichess Bot Setup" Foreground="#F0ebe4" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </StackPanel>
                     <Button DockPanel.Dock="Right" Content="✕" HorizontalAlignment="Right" VerticalAlignment="Center"
                             Background="Transparent" Foreground="#666" BorderThickness="0" FontSize="16" Padding="8,2"

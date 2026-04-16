@@ -31,6 +31,17 @@ namespace LichessBotSetup
             InitializeComponent();
             _installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LichessBot");
 
+            try
+            {
+                string? v = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3);
+                if (!string.IsNullOrEmpty(v) && TitleVersion != null)
+                {
+                    TitleVersion.Text = $"Lichess Bot Setup v{v}";
+                    this.Title = $"Lichess Bot Setup v{v}";
+                }
+            }
+            catch { }
+
             #pragma warning disable SYSLIB0014
             System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12 | System.Net.SecurityProtocolType.Tls13;
             #pragma warning restore SYSLIB0014
