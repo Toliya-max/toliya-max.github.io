@@ -821,6 +821,19 @@ namespace LichessBotSetup
                     Log("License restored from previous installation.");
                 }
 
+                string licenseKeyToSave = TxtLicenseKey?.Text?.Trim() ?? "";
+                if (!_isUpdateMode && savedLicDat == null && !string.IsNullOrEmpty(licenseKeyToSave))
+                {
+                    bool saved = await SaveLicenseAsync(licenseKeyToSave);
+                    Log(saved
+                        ? "License key saved to license.dat"
+                        : "WARNING: could not save license.dat, user will be asked to activate on first launch");
+                }
+                else if (savedLicDat != null)
+                {
+                    Log("Existing license.dat restored (already done above)");
+                }
+
                 AutoConfigureEngine();
                 CreateShortcut();
                 Log("Desktop shortcut created.");
@@ -1018,6 +1031,48 @@ namespace LichessBotSetup
             if (!success)
                 throw new Exception("Python installation failed. Please install Python 3.12 manually.");
             Log("Python installed!");
+        }
+
+        private async Task<bool> SaveLicenseAsync(string licenseKey)
+        {
+            string escaped = licenseKey.Replace("\\", "\\\\").Replace("'", "\\'");
+            string script =
+                $"import sys; sys.path.insert(0, r'{_installDir}'); " +
+                $"import license as L; L.activate('{escaped}')";
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = "python",
+                Arguments = $"-c \"{script.Replace("\"", "\\\"")}\"",
+                WorkingDirectory = _installDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
+            };
+            psi.Environment["PYTHONIOENCODING"] = "utf-8";
+            psi.Environment["PYTHONUTF8"] = "1";
+
+            try
+            {
+                using var p = Process.Start(psi)!;
+                string stderr = await p.StandardError.ReadToEndAsync();
+                await p.WaitForExitAsync();
+                if (p.ExitCode != 0)
+                {
+                    Log($"[LICENSE] activate failed (exit {p.ExitCode}): {stderr.Trim()}");
+                    return false;
+                }
+                string licPath = Path.Combine(_installDir, "license.dat");
+                return File.Exists(licPath);
+            }
+            catch (Exception ex)
+            {
+                Log($"[LICENSE] activate error: {ex.Message}");
+                return false;
+            }
         }
 
         private async Task<bool> ArePipRequirementsSatisfiedAsync(string installDir)
