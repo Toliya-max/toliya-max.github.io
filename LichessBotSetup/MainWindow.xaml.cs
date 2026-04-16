@@ -331,52 +331,28 @@ namespace LichessBotSetup
             });
         }
 
-        private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
+        private const string UpdateBotUrl = "https://t.me/LichessBotDownoloaderbot";
+
+        private void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
         {
-            BtnCheckUpdates.IsEnabled = false;
-            BtnCheckUpdates.Content = "Checking...";
             try
             {
-                const string currentVersion = "1.4.0";
-                const string repo = "Toliya-max/lichess-bot";
+                var res = MessageBox.Show(this,
+                    "Updates are delivered via the Telegram distribution bot.\n\n" +
+                    "Open it now? The bot will send you the latest Lichess Bot Setup ZIP " +
+                    "directly in chat - just tap the file, extract it, and run setup.",
+                    "Check for Updates", MessageBoxButton.YesNo, MessageBoxImage.Information);
 
-                using var client = new HttpClient();
-                client.Timeout = TimeSpan.FromSeconds(10);
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotSetup/1.0");
-
-                string latestVersion = "";
-                string[] checkUrls = {
-                    "https://gist.githubusercontent.com/Toliya-max/17c837a5b5a108b5f85b76c3d8dcf9a9/raw/version.txt",
-                };
-                foreach (string checkUrl in checkUrls)
-                {
-                    try { latestVersion = (await client.GetStringAsync(checkUrl)).Trim().TrimStart('v'); if (!string.IsNullOrEmpty(latestVersion)) break; } catch { }
-                }
-
-                if (string.IsNullOrEmpty(latestVersion))
-                {
-                    MessageBox.Show(this, "Could not reach update server. Check your internet connection.", "Update Check Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                if (!Version.TryParse(latestVersion, out var v1) || !Version.TryParse(currentVersion, out var v2) || v1 <= v2)
-                {
-                    MessageBox.Show(this, $"You already have the latest version (v{currentVersion}).", "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                var res = MessageBox.Show(this, $"Version v{latestVersion} is available!\n\nOpen the download page?", "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Information);
                 if (res == MessageBoxResult.Yes)
-                    Process.Start(new ProcessStartInfo($"https://github.com/{repo}/releases/latest") { UseShellExecute = true });
+                {
+                    Process.Start(new ProcessStartInfo(UpdateBotUrl) { UseShellExecute = true });
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Update check failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                BtnCheckUpdates.IsEnabled = true;
-                BtnCheckUpdates.Content = "Check for Updates";
+                MessageBox.Show(this,
+                    $"Could not open the Telegram bot: {ex.Message}\n\nURL: {UpdateBotUrl}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
