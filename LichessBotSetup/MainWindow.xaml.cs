@@ -197,10 +197,11 @@ namespace LichessBotSetup
                 byte[] expectedSig = new byte[14];
                 Array.Copy(fullHmac, 0, expectedSig, 0, 14);
 
-                if (!storedSig.SequenceEqual(expectedSig))
+                if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(storedSig, expectedSig))
                     return new LicenseValidationResult(false, null, "Key signature invalid.");
 
-                if (keyType != 0x4D && keyType != 0x59 && keyType != 0x44)
+                byte[] validTypes = { 0x31, 0x57, 0x51, 0x4D, 0x59, 0x44 };
+                if (!validTypes.Contains(keyType))
                     return new LicenseValidationResult(false, null, "Unknown key type.");
 
                 bool isDev = keyType == 0x44;
@@ -455,10 +456,34 @@ namespace LichessBotSetup
         // ════════════════════════════════════════════
         //  KILL OLD PROCESSES
         // ════════════════════════════════════════════
-        private void KillOldProcesses()
+        private static readonly string[] BotProcessNames = {
+            "LichessBotGUI",
+            "pythonw", "python", "py",
+            "stockfish", "stockfish-windows-x86-64-avx2", "stockfish_18",
+            "cli", "bot",
+        };
+
+        private static readonly string[] BotProcessNamesOwnedOnly = {
+            "pythonw", "python", "py",
+            "stockfish", "stockfish-windows-x86-64-avx2", "stockfish_18",
+            "cli", "bot",
+        };
+
+        private bool _processHoldsPath(Process p, string root)
         {
-            string[] processNames = { "LichessBotGUI", "cli", "bot" };
-            foreach (string name in processNames)
+            try
+            {
+                string? file = p.MainModule?.FileName;
+                if (string.IsNullOrEmpty(file)) return false;
+                return file.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        private void KillBotProcesses(bool ownedOnly = false)
+        {
+            var names = ownedOnly ? BotProcessNamesOwnedOnly : BotProcessNames;
+            foreach (string name in names)
             {
                 try
                 {
@@ -466,14 +491,61 @@ namespace LichessBotSetup
                     {
                         try
                         {
-                            proc.Kill();
+                            if (ownedOnly && !_processHoldsPath(proc, _installDir))
+                                continue;
+                            proc.Kill(entireProcessTree: true);
                             proc.WaitForExit(3000);
-                            Log($"Terminated process: {name}.exe");
+                            Log($"Terminated: {name}.exe (pid {proc.Id})");
                         }
                         catch { }
                     }
                 }
                 catch { }
+            }
+        }
+
+        private void KillOldProcesses() => KillBotProcesses();
+
+        private async Task<bool> ForceDeleteDirectoryAsync(string path, int maxAttempts = 6)
+        {
+            if (!Directory.Exists(path)) return true;
+
+            try
+            {
+                foreach (string file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+                {
+                    try { File.SetAttributes(file, FileAttributes.Normal); } catch { }
+                }
+            }
+            catch { }
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    Directory.Delete(path, recursive: true);
+                    return true;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    Log($"Delete attempt {attempt}/{maxAttempts} failed: {ex.Message}. Killing holders...");
+                    KillBotProcesses(ownedOnly: attempt <= 2);
+                    await Task.Delay(400 * attempt);
+                }
+            }
+
+            try
+            {
+                string bak = path + "_old_" + DateTime.Now.Ticks;
+                Directory.Move(path, bak);
+                Log($"Could not delete, moved aside: {bak}");
+                try { Directory.Delete(bak, recursive: true); } catch { }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"ForceDelete failed completely: {ex.Message}");
+                return false;
             }
         }
 
@@ -488,7 +560,9 @@ namespace LichessBotSetup
                 string licenseKey = TxtLicenseKey?.Text?.Trim() ?? "";
                 if (string.IsNullOrEmpty(licenseKey))
                 {
-                    ShowLicenseStatus("Please enter your license key.", isError: true);
+                    MessageBox.Show(this, "You have not entered a license key.\nPlease enter your license key first.",
+                        "License Key Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    BtnBack_Click(sender, e);
                     return;
                 }
 
@@ -496,7 +570,9 @@ namespace LichessBotSetup
                 var licResult = await Task.Run(() => ValidateLicenseKey(licenseKey));
                 if (!licResult.Valid)
                 {
-                    ShowLicenseStatus(licResult.Error ?? "Invalid license key.", isError: true);
+                    MessageBox.Show(this, licResult.Error ?? "Invalid license key.",
+                        "Invalid License", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    BtnBack_Click(sender, e);
                     return;
                 }
                 ShowLicenseStatus($"License valid: {licResult.Info}", isError: false);
@@ -581,10 +657,17 @@ namespace LichessBotSetup
                 if (File.Exists(oldEnvPath))
                     savedEnv = File.ReadAllBytes(oldEnvPath);
 
+                Log("Stopping running processes...");
+                KillBotProcesses();
+                await Task.Delay(500);
+
                 if (Directory.Exists(_installDir))
                 {
                     Log("Cleaning previous installation...");
-                    try { Directory.Delete(_installDir, true); } catch { }
+                    if (!await ForceDeleteDirectoryAsync(_installDir))
+                        throw new Exception(
+                            $"Could not clean {_installDir}. " +
+                            "Close all Lichess Bot processes in Task Manager or reboot, then try again.");
                 }
                 Directory.CreateDirectory(_installDir);
 
@@ -602,31 +685,37 @@ namespace LichessBotSetup
                 SetTaskStatus(Task3Icon, Task3Text, "done");
                 SetProgress(50);
 
-                // ── Task 4: Download Chess Engine ──
+                // ── Task 4 + 5: Engine & Python in parallel ──
                 SetTaskStatus(Task4Icon, Task4Text, "active");
-                await DownloadStockfishEngine();
-                SetTaskStatus(Task4Icon, Task4Text, "done");
-                SetProgress(70);
-
-                // ── Task 5: Python & Dependencies ──
                 SetTaskStatus(Task5Icon, Task5Text, "active");
-                Log("Checking for Python...");
-                if (!await IsPythonInstalled())
-                {
-                    Log("Python not found. Downloading installer...");
-                    await DownloadAndInstallPython();
-                    Environment.SetEnvironmentVariable("PATH",
-                        Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User)
-                        + ";" + Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine));
-                }
-                else
-                {
-                    Log("Python found.");
-                }
 
-                Log("Installing Python packages...");
-                await InstallPipRequirementsAsync(_installDir);
-                SetTaskStatus(Task5Icon, Task5Text, "done");
+                var engineTask = Task.Run(async () =>
+                {
+                    await DownloadStockfishEngine();
+                    Dispatcher.Invoke(() => { SetTaskStatus(Task4Icon, Task4Text, "done"); SetProgress(65); });
+                });
+
+                var pythonTask = Task.Run(async () =>
+                {
+                    Dispatcher.Invoke(() => Log("Checking for Python..."));
+                    if (!await IsPythonInstalled())
+                    {
+                        Dispatcher.Invoke(() => Log("Python not found. Downloading installer..."));
+                        await DownloadAndInstallPython();
+                        Environment.SetEnvironmentVariable("PATH",
+                            Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User)
+                            + ";" + Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine));
+                    }
+                    else
+                    {
+                        Dispatcher.Invoke(() => Log("Python found."));
+                    }
+                    Dispatcher.Invoke(() => Log("Installing Python packages..."));
+                    await InstallPipRequirementsAsync(_installDir);
+                    Dispatcher.Invoke(() => { SetTaskStatus(Task5Icon, Task5Text, "done"); SetProgress(85); });
+                });
+
+                await Task.WhenAll(engineTask, pythonTask);
                 SetProgress(90);
 
                 // ── Task 6: Write .env & Create Shortcut ──
@@ -651,6 +740,7 @@ namespace LichessBotSetup
                     Log("License restored from previous installation.");
                 }
 
+                AutoConfigureEngine();
                 CreateShortcut();
                 Log("Desktop shortcut created.");
                 RegisterInWindowsApps();
@@ -709,19 +799,28 @@ namespace LichessBotSetup
 
             try
             {
-                using (var response = await _http.GetAsync(StockfishUrl, HttpCompletionOption.ResponseHeadersRead))
+                using var response = await _http.GetAsync(StockfishUrl, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                long totalBytes = response.Content.Headers.ContentLength ?? -1;
+                using var stream = await response.Content.ReadAsStreamAsync();
+                using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920);
+                byte[] buffer = new byte[81920];
+                long downloaded = 0;
+                int read;
+                while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
-                    response.EnsureSuccessStatusCode();
-                    using (var stream = await response.Content.ReadAsStreamAsync())
-                    using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    await fileStream.WriteAsync(buffer, 0, read);
+                    downloaded += read;
+                    if (totalBytes > 0)
                     {
-                        await stream.CopyToAsync(fileStream);
+                        int pct = (int)(downloaded * 100 / totalBytes);
+                        Dispatcher.Invoke(() => Log($"Downloading engine... {pct}% ({downloaded / 1024 / 1024}MB / {totalBytes / 1024 / 1024}MB)"));
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log($"Direct download failed ({ex.Message}). Trying PowerShell fallback...");
+                Log($"Direct download failed ({ex.Message}). Trying PowerShell...");
                 var tcs = new TaskCompletionSource<bool>();
                 Process ps = new Process();
                 ps.StartInfo.FileName = "powershell.exe";
@@ -731,33 +830,27 @@ namespace LichessBotSetup
                 ps.EnableRaisingEvents = true;
                 ps.Exited += (s, e) => tcs.SetResult(ps.ExitCode == 0);
                 ps.Start();
-
-                bool ok = await tcs.Task;
-                if (!ok || !File.Exists(zipPath))
-                    throw new Exception("Failed to download Stockfish engine. Check your internet connection.");
-                Log("Fallback download successful.");
+                if (!await tcs.Task || !File.Exists(zipPath))
+                    throw new Exception("Failed to download Stockfish engine.");
             }
 
             Log("Extracting engine...");
             if (Directory.Exists(tempExtract)) Directory.Delete(tempExtract, true);
             ZipFile.ExtractToDirectory(zipPath, tempExtract);
 
-            // Move extracted content to target
             Directory.CreateDirectory(engineDir);
             var dirs = Directory.GetDirectories(tempExtract);
             if (dirs.Length > 0)
             {
-                // Move contents from the inner folder to engineDir
                 foreach (var file in Directory.GetFiles(dirs[0], "*", SearchOption.AllDirectories))
                 {
                     string relativePath = Path.GetRelativePath(dirs[0], file);
                     string destPath = Path.Combine(engineDir, relativePath);
                     Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-                    File.Copy(file, destPath, true);
+                    File.Move(file, destPath, true);
                 }
             }
 
-            // Cleanup
             try { File.Delete(zipPath); } catch { }
             try { Directory.Delete(tempExtract, true); } catch { }
 
@@ -850,7 +943,7 @@ namespace LichessBotSetup
 
             Process p = new Process();
             p.StartInfo.FileName = "python";
-            p.StartInfo.Arguments = "-m pip install -r requirements.txt";
+            p.StartInfo.Arguments = "-m pip install --no-cache-dir --prefer-binary -q -r requirements.txt";
             p.StartInfo.WorkingDirectory = installDir;
             p.StartInfo.UseShellExecute = false;
             p.StartInfo.CreateNoWindow = true;
@@ -913,9 +1006,79 @@ namespace LichessBotSetup
             }
         }
 
-        // ════════════════════════════════════════════
-        //  SHORTCUT
-        // ════════════════════════════════════════════
+        private void AutoConfigureEngine()
+        {
+            string settingsPath = Path.Combine(_installDir, "settings.json");
+            if (File.Exists(settingsPath))
+            {
+                Log("Settings already exist — skipping auto-config.");
+                return;
+            }
+
+            try
+            {
+                int cpuCores = Environment.ProcessorCount;
+                long totalRamMB = 0;
+                try
+                {
+                    totalRamMB = (long)(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024);
+                }
+                catch
+                {
+                    totalRamMB = 8192;
+                }
+
+                int threads = Math.Max(1, Math.Min(cpuCores - 1, 16));
+                int hashMB = totalRamMB switch
+                {
+                    >= 32768 => 8192,
+                    >= 16384 => 4096,
+                    >= 8192  => 2048,
+                    >= 4096  => 1024,
+                    _        => 256
+                };
+                int moveOverhead = cpuCores >= 8 ? 50 : 100;
+
+                var config = new
+                {
+                    AutoChallenger = true,
+                    Rated = false,
+                    AutoResign = true,
+                    ResignThreshold = "-5.0",
+                    MinRating = "1900",
+                    MaxGames = "0",
+                    BaseTime = "3",
+                    Increment = "0",
+                    EnginePath = "Default Stockfish 18",
+                    BookPath = "Default gm_openings.bin",
+                    UseNNUE = true,
+                    SkillLevel = 20.0,
+                    MoveSpeed = 1.0,
+                    MaxDepth = "0",
+                    Ponder = false,
+                    Threads = threads,
+                    Hash = hashMB,
+                    MoveOverhead = moveOverhead.ToString(),
+                    VariantIndex = 0,
+                    ColorIndex = 0,
+                    SendChat = true,
+                    Greeting = "glhf!",
+                    GGMessage = "gg wp!",
+                    AcceptRematch = true
+                };
+
+                string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(settingsPath, json);
+
+                Log($"[HARDWARE] CPU: {cpuCores} cores, RAM: {totalRamMB} MB");
+                Log($"[HARDWARE] Auto-configured: Threads={threads}, Hash={hashMB}MB, Overhead={moveOverhead}ms");
+            }
+            catch (Exception ex)
+            {
+                Log($"Auto-config skipped: {ex.Message}");
+            }
+        }
+
         private void CreateShortcut()
         {
             string desktopDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
@@ -968,7 +1131,7 @@ $Shortcut.Save()
             }
         }
 
-        private void BtnUninstall_Click(object sender, RoutedEventArgs e)
+        private async void BtnUninstall_Click(object sender, RoutedEventArgs e)
         {
             var result = MessageBox.Show(this,
                 $"This will permanently delete all Lichess Bot files from:\n\n{_installDir}\n\nAnd the Desktop shortcut.\n\nAre you sure?",
@@ -978,12 +1141,23 @@ $Shortcut.Save()
 
             try
             {
+                KillBotProcesses();
+                await Task.Delay(400);
+
                 if (Directory.Exists(_installDir))
-                    Directory.Delete(_installDir, recursive: true);
+                {
+                    bool ok = await ForceDeleteDirectoryAsync(_installDir);
+                    if (!ok)
+                        throw new IOException(
+                            $"Could not delete {_installDir}. " +
+                            "Close all processes in Task Manager or reboot, then retry.");
+                }
 
                 string shortcutPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Lichess Bot.lnk");
                 if (File.Exists(shortcutPath))
-                    File.Delete(shortcutPath);
+                {
+                    try { File.Delete(shortcutPath); } catch { }
+                }
 
                 try
                 {
