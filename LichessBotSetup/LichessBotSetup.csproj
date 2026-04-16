@@ -16,7 +16,6 @@
     <Copyright>Copyright © 2025 Toliya-max</Copyright>
     <ApplicationIcon>..\LichessBotGUI\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <PublishReadyToRun>false</PublishReadyToRun>
