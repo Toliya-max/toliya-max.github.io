@@ -26,6 +26,82 @@ namespace LichessBotSetup
 
         private const string StockfishUrl = "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-windows-x86-64-avx2.zip";
 
+        private string SecretsCacheDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "LichessBot-cache", "secrets");
+
+        private static string? ReadTokenFromEnv(string envPath)
+        {
+            if (!File.Exists(envPath)) return null;
+            foreach (string line in File.ReadAllLines(envPath))
+            {
+                if (line.StartsWith("LICHESS_API_TOKEN="))
+                    return line.Substring("LICHESS_API_TOKEN=".Length).Trim();
+            }
+            return null;
+        }
+
+        private (string? token, bool hasLicense) LoadCachedCredentials()
+        {
+            string cachedEnv = Path.Combine(SecretsCacheDir, ".env");
+            string cachedLic = Path.Combine(SecretsCacheDir, "license.dat");
+            string installEnv = Path.Combine(_installDir, ".env");
+            string installLic = Path.Combine(_installDir, "license.dat");
+
+            string? token = ReadTokenFromEnv(installEnv) ?? ReadTokenFromEnv(cachedEnv);
+            bool hasLicense = File.Exists(installLic) || File.Exists(cachedLic);
+            return (token, hasLicense);
+        }
+
+        private void SaveCachedCredentials()
+        {
+            try
+            {
+                Directory.CreateDirectory(SecretsCacheDir);
+                string installEnv = Path.Combine(_installDir, ".env");
+                string installLic = Path.Combine(_installDir, "license.dat");
+                if (File.Exists(installEnv))
+                    File.Copy(installEnv, Path.Combine(SecretsCacheDir, ".env"), overwrite: true);
+                if (File.Exists(installLic))
+                    File.Copy(installLic, Path.Combine(SecretsCacheDir, "license.dat"), overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                Log($"[CACHE] Could not save credentials: {ex.Message}");
+            }
+        }
+
+        private bool RestoreCachedCredentialsIfMissing()
+        {
+            try
+            {
+                string cachedEnv = Path.Combine(SecretsCacheDir, ".env");
+                string cachedLic = Path.Combine(SecretsCacheDir, "license.dat");
+                string installEnv = Path.Combine(_installDir, ".env");
+                string installLic = Path.Combine(_installDir, "license.dat");
+
+                bool restored = false;
+                if (!File.Exists(installEnv) && File.Exists(cachedEnv))
+                {
+                    Directory.CreateDirectory(_installDir);
+                    File.Copy(cachedEnv, installEnv, overwrite: false);
+                    restored = true;
+                }
+                if (!File.Exists(installLic) && File.Exists(cachedLic))
+                {
+                    Directory.CreateDirectory(_installDir);
+                    File.Copy(cachedLic, installLic, overwrite: false);
+                    restored = true;
+                }
+                return restored;
+            }
+            catch (Exception ex)
+            {
+                Log($"[CACHE] Restore failed: {ex.Message}");
+                return false;
+            }
+        }
+
         public MainWindow()
         {
             InitializeComponent();
@@ -49,55 +125,34 @@ namespace LichessBotSetup
             string[] args = Environment.GetCommandLineArgs();
             bool isUpdate = args.Length > 1 && args[1].Equals("/update", StringComparison.OrdinalIgnoreCase);
 
+            var (cachedToken, cachedHasLicense) = LoadCachedCredentials();
+
             if (isUpdate)
             {
                 _isUpdateMode = true;
-                // Silent update: read existing token and go straight to install
-                string envPath = Path.Combine(_installDir, ".env");
-                string token = "";
-                if (File.Exists(envPath))
-                {
-                    foreach (string line in File.ReadAllLines(envPath))
-                    {
-                        if (line.StartsWith("LICHESS_API_TOKEN="))
-                        {
-                            token = line.Substring("LICHESS_API_TOKEN=".Length).Trim();
-                            break;
-                        }
-                    }
-                }
-                TxtToken.Text = token;
+                TxtToken.Text = cachedToken ?? "";
                 BtnInstall_Click(this, new System.Windows.RoutedEventArgs());
+                return;
             }
-            else if (Directory.Exists(_installDir))
+
+            bool alreadyInstalled = Directory.Exists(_installDir);
+            if (alreadyInstalled)
             {
                 BtnUninstallOnly.Visibility = Visibility.Visible;
                 AlreadyInstalledBanner.Visibility = Visibility.Visible;
+            }
 
-                // Pre-fill token and skip license if already activated
-                string existingEnv = Path.Combine(_installDir, ".env");
-                string existingLic = Path.Combine(_installDir, "license.dat");
-                if (File.Exists(existingEnv))
-                {
-                    foreach (string line in File.ReadAllLines(existingEnv))
-                    {
-                        if (line.StartsWith("LICHESS_API_TOKEN="))
-                        {
-                            TxtToken.Text = line.Substring("LICHESS_API_TOKEN=".Length).Trim();
-                            break;
-                        }
-                    }
-                }
-                if (File.Exists(existingLic) && !string.IsNullOrEmpty(TxtToken.Text))
-                {
-                    // Both license and token exist — go straight to install
-                    AlreadyInstalledBanner.Visibility = Visibility.Visible;
-                    SubPageLicense.Visibility = Visibility.Collapsed;
-                    SubPageToken.Visibility = Visibility.Visible;
-                    BtnNext.Visibility = Visibility.Collapsed;
-                    BtnInstall.Visibility = Visibility.Visible;
-                    BtnBack.Visibility = Visibility.Visible;
-                }
+            if (!string.IsNullOrEmpty(cachedToken) && cachedHasLicense)
+            {
+                _isUpdateMode = true;
+                TxtToken.Text = cachedToken;
+                Loaded += (s, e) => BtnInstall_Click(this, new System.Windows.RoutedEventArgs());
+                return;
+            }
+
+            if (alreadyInstalled && !string.IsNullOrEmpty(cachedToken))
+            {
+                TxtToken.Text = cachedToken;
             }
         }
 
@@ -674,6 +729,9 @@ namespace LichessBotSetup
                 SetTaskStatus(Task3Icon, Task3Text, "active");
                 Log($"Installing to: {_installDir}");
 
+                if (RestoreCachedCredentialsIfMissing())
+                    Log("Credentials restored from secrets cache");
+
                 byte[]? savedLicDat = null;
                 byte[]? savedEnv = null;
                 string licDatPath = Path.Combine(_installDir, "license.dat");
@@ -841,6 +899,7 @@ namespace LichessBotSetup
                 CreateShortcut();
                 Log("Desktop shortcut created.");
                 RegisterInWindowsApps();
+                SaveCachedCredentials();
                 SetTaskStatus(Task6Icon, Task6Text, "done");
                 SetProgress(100);
 
