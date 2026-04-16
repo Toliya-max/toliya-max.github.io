@@ -287,6 +287,7 @@ def notify_users(notify_chat=None):
     fallback_text = (f"🆕 <b>Update v{version} available!</b>\n\n"
                      f"Press <b>📥 Get Update</b> to download.")
 
+    fallback_count = 0
     for cid_str in users:
         try:
             cid = int(cid_str)
@@ -297,16 +298,32 @@ def notify_users(notify_chat=None):
             skipped += 1
             continue
         try:
-            ok = False
+            delivered = False
             if file_id:
-                ok = tg_send_doc_by_id(cid, file_id, caption)
-            if not ok:
-                tg_send(cid, fallback_text)
-            sent += 1
-        except Exception:
+                delivered = tg_send_doc_by_id(cid, file_id, caption)
+            if delivered:
+                sent += 1
+                continue
+            try:
+                r = requests.post(f"{TG_API}/sendMessage", json={
+                    "chat_id": cid, "text": fallback_text, "parse_mode": "HTML",
+                }, timeout=30)
+                if r.ok and r.json().get("ok"):
+                    fallback_count += 1
+                    sent += 1
+                else:
+                    failed += 1
+                    print(f"  user {cid}: send failed {r.status_code} {r.text[:200]}")
+            except Exception as e:
+                failed += 1
+                print(f"  user {cid}: fallback failed {e}")
+        except Exception as e:
             failed += 1
-
-    msg = f"📢 Notified {sent} users (failed: {failed})"
+            print(f"  user {cid_str}: {e}")
+    if fallback_count:
+        msg = f"📢 Notified {sent} users (failed: {failed}, fallback-text: {fallback_count})"
+    else:
+        msg = f"📢 Notified {sent} users (failed: {failed})"
     if notify_chat:
         tg_send(notify_chat, msg)
     print(msg)

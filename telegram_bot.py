@@ -123,6 +123,7 @@ _SETUP_INSTRUCTIONS = (
 )
 
 def _send_setup(chat_id, version=None):
+    _sync_release_fields_from_disk(data)
     fid = data.get("update_file_id")
     ver = version or data.get("update_version", "latest")
     changelog = data.get("update_changelog") or ""
@@ -168,7 +169,24 @@ def _load_data():
             "users_cache": {}, "processed_donation_ids": [],
             "pending_matches": {}, "donations_log": []}
 
+_RELEASE_FIELDS = (
+    "update_file_id", "update_version", "update_changelog",
+    "update_message_id", "update_chat_id", "download_url",
+)
+
+def _sync_release_fields_from_disk(d):
+    try:
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                disk = json.load(f)
+            for k in _RELEASE_FIELDS:
+                if k in disk and disk[k] != d.get(k):
+                    d[k] = disk[k]
+    except Exception as e:
+        log.warning(f"[DATA] sync release fields failed: {e}")
+
 def _save_data(d):
+    _sync_release_fields_from_disk(d)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(d, f, indent=2, ensure_ascii=False)
 
@@ -535,6 +553,18 @@ def cb_genkey(c):
     except Exception as e:
         bot.send_message(cid, f"❌ Error: {e}")
 
+@bot.message_handler(commands=["reload"])
+def cmd_reload(m):
+    if not is_admin(m.chat.id):
+        return
+    _sync_release_fields_from_disk(data)
+    ver = data.get("update_version", "?")
+    fid = (data.get("update_file_id") or "")[:30]
+    bot.send_message(m.chat.id,
+        f"🔄 Data reloaded.\n"
+        f"Version: <b>v{ver}</b>\n"
+        f"file_id: <code>{fid}...</code>")
+
 @bot.message_handler(commands=["release"])
 def cmd_release(m):
     cid = m.chat.id
@@ -756,6 +786,7 @@ def btn_check_version(m):
         bot.send_message(cid, "⛔ Verify your key first.", reply_markup=main_kb(cid))
         return
 
+    _sync_release_fields_from_disk(data)
     ver = data.get("update_version")
     fid = data.get("update_file_id")
     changelog = data.get("update_changelog") or ""
