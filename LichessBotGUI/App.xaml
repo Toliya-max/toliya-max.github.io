@@ -142,10 +142,14 @@
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="Tag" Value="{x:Null}"/>
+                                </MultiTrigger.Conditions>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource BgCardHoverBrush}"/>
-                            </Trigger>
+                            </MultiTrigger>
                             <Trigger Property="Tag" Value="selected">
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentLightBrush}"/>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>

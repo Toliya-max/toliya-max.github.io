@@ -1143,8 +1143,31 @@ namespace LichessBotGUI
 
         private void SelectTimerPreset(Button selected)
         {
+            Brush accentLight = (Brush)TryFindResource("AccentLightBrush") ?? Brushes.Goldenrod;
+            Brush accent      = (Brush)TryFindResource("AccentBrush")      ?? Brushes.DarkGoldenrod;
+            Brush card        = (Brush)TryFindResource("BgCardBrush")      ?? Brushes.Transparent;
+            Brush border      = (Brush)TryFindResource("BorderBrush")      ?? Brushes.DimGray;
+            Brush text        = (Brush)TryFindResource("TextPrimaryBrush") ?? Brushes.White;
+
             foreach (var b in TimerPresetButtons)
-                b.Tag = b == selected ? "selected" : null;
+            {
+                if (b == selected)
+                {
+                    b.Tag = "selected";
+                    b.Background = accentLight;
+                    b.BorderBrush = accent;
+                    b.Foreground = card;
+                    b.FontWeight = FontWeights.SemiBold;
+                }
+                else
+                {
+                    b.Tag = null;
+                    b.Background = card;
+                    b.BorderBrush = border;
+                    b.Foreground = text;
+                    b.FontWeight = FontWeights.Normal;
+                }
+            }
         }
 
         private void SyncTimerPresetFromValues()
