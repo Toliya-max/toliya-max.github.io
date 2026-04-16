@@ -78,6 +78,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 DA_POLL_INTERVAL = 15
+VERSION_CHECK_INTERVAL = 10 * 60
+GITHUB_RELEASES_REPO = "Toliya-max/lichess-bot-releases"
+SETUP_ASSET_NAME = "LichessBotSetup.exe"
 PROCESSED_DONATIONS_MAX = 500
 PENDING_MATCH_TTL = 24 * 3600
 PENDING_PAYMENT_TTL = 24 * 3600
@@ -1346,6 +1349,78 @@ async def _token_keeper():
             log.error(f"[TOKEN] keeper error: {e}")
         await asyncio.sleep(6 * 3600)
 
+def _parse_version(v):
+    if not v:
+        return (0, 0, 0)
+    v = str(v).lstrip("v").strip()
+    parts = []
+    for p in v.split("."):
+        num = ""
+        for ch in p:
+            if ch.isdigit():
+                num += ch
+            else:
+                break
+        parts.append(int(num) if num else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+async def _fetch_latest_release():
+    url = f"https://github.com/{GITHUB_RELEASES_REPO}/releases/latest"
+    headers = {"User-Agent": "LichessBotTelegram/1.0"}
+    async with _http_client(timeout=30.0, follow_redirects=False) as c:
+        r = await c.get(url, headers=headers)
+    loc = r.headers.get("location") or r.headers.get("Location") or ""
+    m = re.search(r"/tag/v?([\d.]+)", loc)
+    if not m:
+        return None, None
+    tag = m.group(1)
+    asset_url = (f"https://github.com/{GITHUB_RELEASES_REPO}/releases/"
+                 f"download/v{tag}/{SETUP_ASSET_NAME}")
+    return tag, asset_url
+
+async def _version_watcher():
+    log.info("[VERSION] watcher started")
+    while True:
+        try:
+            tag, asset_url = await _fetch_latest_release()
+            if tag:
+                current = data.get("update_version") or ""
+                if _parse_version(tag) > _parse_version(current):
+                    log.info(f"[VERSION] new release detected: {current} -> {tag}")
+                    data["update_version"] = tag
+                    data["download_url"] = asset_url
+                    data["update_file_id"] = None
+                    _save_data(data)
+                    _broadcast_update(tag)
+                else:
+                    log.info(f"[VERSION] up-to-date: {current}")
+        except Exception as e:
+            log.error(f"[VERSION] watcher error: {e}")
+        await asyncio.sleep(VERSION_CHECK_INTERVAL)
+
+def _broadcast_update(version):
+    users = data.get("verified_users", {})
+    sent = failed = 0
+    for cid_str in list(users.keys()):
+        try:
+            cid = int(cid_str)
+        except ValueError:
+            continue
+        try:
+            bot.send_message(cid,
+                f"🆕 <b>Update v{version} available!</b>\n\n"
+                f"Press <b>📥 Get Update</b> to download.",
+                reply_markup=main_kb(cid))
+            sent += 1
+        except Exception:
+            failed += 1
+    log.info(f"[VERSION] broadcast v{version}: sent={sent} failed={failed}")
+    _notify_admins_bg(
+        f"🆕 <b>Auto-detected new release v{version}</b>\n"
+        f"Notified {sent} users (failed: {failed}).")
+
 async def listen_donations():
     import websockets
 
@@ -1474,7 +1549,7 @@ async def poll_donations_rest():
         await asyncio.sleep(DA_POLL_INTERVAL)
 
 async def _run_ws_with_keeper():
-    await asyncio.gather(listen_donations(), _token_keeper())
+    await asyncio.gather(listen_donations(), _token_keeper(), _version_watcher())
 
 def _run_da():
     loop = asyncio.new_event_loop()
