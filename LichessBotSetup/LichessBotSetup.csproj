@@ -10,9 +10,9 @@
     <Product>Lichess Bot</Product>
     <Company>Toliya-max</Company>
     <Description>Lichess Bot Installer</Description>
-    <Version>1.4.20</Version>
-    <AssemblyVersion>1.4.20.0</AssemblyVersion>
-    <FileVersion>1.4.20.0</FileVersion>
+    <Version>1.4.21</Version>
+    <AssemblyVersion>1.4.21.0</AssemblyVersion>
+    <FileVersion>1.4.21.0</FileVersion>
     <Copyright>Copyright © 2025 Toliya-max</Copyright>
     <ApplicationIcon>..\LichessBotGUI\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>

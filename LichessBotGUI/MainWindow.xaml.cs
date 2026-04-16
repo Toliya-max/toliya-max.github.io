@@ -567,26 +567,21 @@ namespace LichessBotGUI
                             var evalIdx = e.Data.IndexOf("(Eval: ") + 7;
                             var colorIdx = e.Data.IndexOf(" | Color: ", evalIdx);
                             var endIdx = e.Data.IndexOf(")", evalIdx);
+                            int valEnd = colorIdx > evalIdx ? colorIdx : endIdx;
 
-                            if (colorIdx > evalIdx && endIdx > colorIdx)
+                            if (valEnd > evalIdx)
                             {
-                                string evalStr = e.Data.Substring(evalIdx, colorIdx - evalIdx);
-                                string colorStr = e.Data.Substring(colorIdx + 10, endIdx - (colorIdx + 10)).Trim();
-
-                                bool isBotWhite = string.Equals(colorStr, "white", StringComparison.OrdinalIgnoreCase);
+                                string evalStr = e.Data.Substring(evalIdx, valEnd - evalIdx).Trim();
 
                                 double whiteEval = 0;
                                 bool isMate = false;
-                                int? mateIn = null;
-                                bool mateForWhite = false;
 
                                 if (evalStr.StartsWith("M") || evalStr.StartsWith("-M"))
                                 {
                                     isMate = true;
-                                    mateForWhite = !evalStr.StartsWith("-");
-                                    string num = evalStr.TrimStart('-').Substring(1);
-                                    if (int.TryParse(num, out int mv)) mateIn = mv;
-                                    whiteEval = mateForWhite ? 10 : -10;
+                                    bool forBlack = evalStr.StartsWith("-");
+                                    LblEval.Text = forBlack ? "-#" : "#";
+                                    whiteEval = forBlack ? -10 : 10;
                                 }
                                 else if (double.TryParse(evalStr,
                                     System.Globalization.NumberStyles.Any,
@@ -594,36 +589,16 @@ namespace LichessBotGUI
                                     out double parsedEval))
                                 {
                                     whiteEval = parsedEval;
+                                    LblEval.Text = (whiteEval > 0 ? "+" : "")
+                                        + whiteEval.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
                                 }
 
-                                double botEval = isBotWhite ? whiteEval : -whiteEval;
+                                double clamped = Math.Max(-10, Math.Min(10, whiteEval));
+                                double whitePct = (clamped + 10) / 20.0 * 100.0;
+                                double blackPct = 100.0 - whitePct;
 
-                                if (isMate)
-                                {
-                                    bool mateForBot = (isBotWhite == mateForWhite);
-                                    int n = mateIn ?? 0;
-                                    LblEval.Text = (mateForBot ? "+#" : "-#") + n;
-                                }
-                                else
-                                {
-                                    LblEval.Text = (botEval >= 0 ? "+" : "")
-                                        + botEval.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-                                }
-
-                                double clamped = Math.Max(-10, Math.Min(10, botEval));
-                                double selfPct = (clamped + 10) / 20.0 * 100.0;
-                                double oppPct = 100.0 - selfPct;
-
-                                if (isBotWhite)
-                                {
-                                    EvalWhiteCol.Width = new GridLength(selfPct, GridUnitType.Star);
-                                    EvalBlackCol.Width = new GridLength(oppPct, GridUnitType.Star);
-                                }
-                                else
-                                {
-                                    EvalBlackCol.Width = new GridLength(selfPct, GridUnitType.Star);
-                                    EvalWhiteCol.Width = new GridLength(oppPct, GridUnitType.Star);
-                                }
+                                EvalWhiteCol.Width = new GridLength(whitePct, GridUnitType.Star);
+                                EvalBlackCol.Width = new GridLength(blackPct, GridUnitType.Star);
                             }
                         }
                         catch { }
