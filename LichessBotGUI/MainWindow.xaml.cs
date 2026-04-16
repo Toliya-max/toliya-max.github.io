@@ -116,7 +116,6 @@ namespace LichessBotGUI
             LoadSettings();
             LoadToken();
             WriteVersionFile();
-            _ = CheckForUpdatesAsync(silent: true);
             Loaded += MainWindow_Loaded;
         }
 
@@ -1086,82 +1085,49 @@ namespace LichessBotGUI
         // ════════════════════════════════════════════
         //  UPDATE CHECK
         // ════════════════════════════════════════════
+        private const string TelegramBotUrl = "https://t.me/LichessBotDownoloaderbot";
+
         private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
         {
             BtnCheckUpdates.IsEnabled = false;
-            await CheckForUpdatesAsync(silent: false);
-            BtnCheckUpdates.IsEnabled = true;
-        }
-
-        private const string TelegramBotUrl = "https://t.me/LichessBotDownoloaderbot";
-
-        private async Task CheckForUpdatesAsync(bool silent)
-        {
-            string versionUrl = "https://gist.githubusercontent.com/Toliya-max/17c837a5b5a108b5f85b76c3d8dcf9a9/raw/version.txt";
-
             try
             {
-                using var client = new HttpClient();
-                client.Timeout = TimeSpan.FromSeconds(10);
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("LichessBotGUI/1.0");
-
-                string latestVersion;
-                try
-                {
-                    latestVersion = (await client.GetStringAsync(versionUrl)).Trim().TrimStart('v');
-                }
-                catch
-                {
-                    if (!silent) AddLog("Could not reach update server.", LogCategory.Warning);
-                    return;
-                }
-
-                if (string.IsNullOrEmpty(latestVersion))
-                {
-                    if (!silent) AddLog("Could not parse version.", LogCategory.Warning);
-                    return;
-                }
-
-                if (!IsNewerVersion(latestVersion, CurrentVersion))
-                {
-                    if (!silent) AddLog($"Already up to date (v{CurrentVersion}).", LogCategory.System);
-                    return;
-                }
-
-                AddLog($"Update available: v{latestVersion} (current: v{CurrentVersion})", LogCategory.Warning);
-
-                var result = MessageBox.Show(
-                    $"Update v{latestVersion} is available!\n\nOpen Telegram to download automatically?",
-                    "Update Available",
+                var res = MessageBox.Show(
+                    "Updates are delivered via the Telegram distribution bot.\n\n" +
+                    "Open it now? The bot will send you the latest installer ZIP " +
+                    "directly in chat - tap the file, extract, run setup.",
+                    "Check for Updates",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Information);
 
-                if (result == MessageBoxResult.Yes)
+                if (res != MessageBoxResult.Yes) return;
+
+                string licenseKey = "";
+                try
                 {
-                    // Read license key and pass it via deep link for auto-verification
-                    string licenseKey = "";
                     var licCheck = await Task.Run(() => RunLicenseCheck());
                     if (licCheck.Valid && !string.IsNullOrEmpty(licCheck.Key))
                         licenseKey = licCheck.Key.Replace(" ", "");
-
-                    string url = string.IsNullOrEmpty(licenseKey)
-                        ? TelegramBotUrl
-                        : $"{TelegramBotUrl}?start={licenseKey}";
-
-                    Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
                 }
+                catch { }
+
+                string url = string.IsNullOrEmpty(licenseKey)
+                    ? TelegramBotUrl
+                    : $"{TelegramBotUrl}?start={licenseKey}";
+
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             }
             catch (Exception ex)
             {
-                if (!silent) AddLog($"Update error: {ex.Message}", LogCategory.Error);
+                AddLog($"Update error: {ex.Message}", LogCategory.Error);
+                MessageBox.Show(
+                    $"Could not open the Telegram bot: {ex.Message}\n\nURL: {TelegramBotUrl}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private static bool IsNewerVersion(string latest, string current)
-        {
-            if (Version.TryParse(latest, out var v1) && Version.TryParse(current, out var v2))
-                return v1 > v2;
-            return string.Compare(latest, current, StringComparison.Ordinal) > 0;
+            finally
+            {
+                BtnCheckUpdates.IsEnabled = true;
+            }
         }
 
         // ════════════════════════════════════════════
