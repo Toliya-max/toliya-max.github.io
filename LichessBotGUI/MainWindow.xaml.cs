@@ -67,13 +67,15 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.4.0";
+        private const string CurrentVersion = "1.4.2";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;
         private bool _isRunning;
         private ObservableCollection<LogEntry> _logEntries = new();
+        private ObservableCollection<LogEntry> _recentMoves = new();
         private DispatcherTimer? _toastTimer;
+        private int _wins, _draws, _losses, _gamesPlayed;
 
         // Path to the Python bot directory
         // Use Environment.ProcessPath to guarantee we get the true location of the .exe 
@@ -105,15 +107,33 @@ namespace LichessBotGUI
         {
             InitializeComponent();
             ActivityList.ItemsSource = _logEntries;
+            RecentMovesList.ItemsSource = _recentMoves;
             _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
             _toastTimer.Tick += (s, e) => { ToastBorder.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
             AddLog($"Lichess Bot Controller v{CurrentVersion} — Ready.", LogCategory.System);
             AddLog($"Bot directory: {BotDirectory}", LogCategory.System);
+            DetectHardware();
             LoadSettings();
             LoadToken();
             WriteVersionFile();
             _ = CheckForUpdatesAsync(silent: true);
             Loaded += MainWindow_Loaded;
+        }
+
+        private void DetectHardware()
+        {
+            int cpuCores = Environment.ProcessorCount;
+            long totalRamMB = (long)(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024);
+            int maxHash = (int)Math.Min(totalRamMB / 2, 16384);
+            maxHash = Math.Max(maxHash, 64);
+
+            SliderThreads.Maximum = cpuCores;
+            SliderHash.Maximum = maxHash;
+            LblThreadsMax.Text = $"/ {cpuCores}";
+            LblHashMax.Text = $"/ {maxHash}";
+
+            AddLog($"[HARDWARE] CPU: {cpuCores} cores, RAM: {totalRamMB} MB", LogCategory.System);
+            AddLog($"[HARDWARE] Limits: Threads 1-{cpuCores}, Hash 16-{maxHash} MB", LogCategory.System);
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -138,38 +158,35 @@ namespace LichessBotGUI
         {
             var result = await Task.Run(() => RunLicenseCheck());
 
-            if (result.Valid && !forceShowWindow)
+            if (result.Valid)
             {
                 AddLog($"[LICENSE] {result.Info}", LogCategory.System);
                 if (LblLicenseStatus != null)
                     LblLicenseStatus.Text = result.Info ?? "Active";
-                return;
+                if (!forceShowWindow) return;
             }
-
-            // Show activation window
-            if (!forceShowWindow && result.Error != null)
-                AddLog($"[LICENSE] {result.Error}", LogCategory.Warning);
+            else
+            {
+                if (result.Error != null)
+                    AddLog($"[LICENSE] {result.Error}", LogCategory.Warning);
+                if (LblLicenseStatus != null)
+                    LblLicenseStatus.Text = result.Error ?? "Not validated";
+                if (!forceShowWindow) return;
+            }
 
             string currentApiToken = TxtApiToken.Text.Trim();
             var win = new ActivationWindow(
                 PythonPath,
                 BotDirectory,
-                isManageMode: forceShowWindow,
+                isManageMode: true,
                 currentKey: result.Key,
                 currentInfo: result.Valid ? result.Info : null,
                 currentApiToken: currentApiToken);
             win.Owner = this;
             win.ShowDialog();
 
-            if (!win.IsActivated)
-            {
-                // User closed without activating — exit only on mandatory initial check
-                if (!forceShowWindow)
-                    Application.Current.Shutdown();
-                return;
-            }
+            if (!win.IsActivated) return;
 
-            // Re-check after activation — also reload API token from .env
             LoadToken();
             var recheck = await Task.Run(() => RunLicenseCheck());
             if (recheck.Valid)
@@ -222,7 +239,7 @@ namespace LichessBotGUI
                 if (err.Contains("LicenseError:"))
                     err = err.Substring(err.LastIndexOf("LicenseError:") + "LicenseError:".Length).Trim();
                 else if (err.Contains("ModuleNotFoundError"))
-                    return new LicenseCheckResult(true, "License module unavailable — skipping check", null);
+                    return new LicenseCheckResult(false, null, "License module missing. Reinstall required.");
                 else if (string.IsNullOrEmpty(err) && proc.ExitCode != 0)
                     err = "License check failed";
 
@@ -259,11 +276,19 @@ namespace LichessBotGUI
         {
             if (_isRunning) return;
 
-            SaveSettings(); // Save all UI parameters to JSON before starting
+            string cliPath = Path.Combine(BotDirectory, "cli.py");
+            if (!File.Exists(cliPath))
+            {
+                MessageBox.Show(
+                    $"cli.py not found at:\n{cliPath}\n\nPlease reinstall the bot using the latest Setup.",
+                    "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            SaveSettings();
             SaveToken();
             var args = BuildArgs();
-            
-            // Allow using the uninstaller's venv if available
+
             string pythonPath = "python";
             string venvPath = System.IO.Path.Combine(BotDirectory, "venv", "Scripts", "python.exe");
             if (System.IO.File.Exists(venvPath))
@@ -271,7 +296,7 @@ namespace LichessBotGUI
                 pythonPath = venvPath;
             }
 
-            AppendLog($"\n>>> {pythonPath} -u cli.py {args}\n");
+            AppendLog($"{pythonPath} -u cli.py {args}");
 
             try
             {
@@ -349,7 +374,7 @@ namespace LichessBotGUI
                     {
                         var idx = e.Data.IndexOf("Played:");
                         var sub = e.Data.Substring(idx);
-                        LblGames.Text = sub.TrimEnd(')');
+                        LblGamesBottom.Text = sub.TrimEnd(')');
                     }
                     
                     // Parse Eval from log lines like "Engine selected move: e2e4 (Eval: +0.45)"
@@ -381,8 +406,7 @@ namespace LichessBotGUI
                                     LblEval.Text = (eval > 0 ? "+" : "") + eval.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
                                 }
 
-                                // If bot is playing black, invert the evaluation so the bar fills from the bot's perspective
-                                double displayEval = colorStr.Equals("black", StringComparison.OrdinalIgnoreCase) ? -eval : eval;
+                                double displayEval = eval;
 
                                 // Cap eval to [-10, +10] for the bar visuals
                                 double clamped = Math.Max(-10, Math.Min(10, displayEval));
@@ -706,22 +730,49 @@ namespace LichessBotGUI
             };
 
             _logEntries.Add(entry);
-
-            // Keep the last 200 entries max to avoid memory growth.
             while (_logEntries.Count > 200)
                 _logEntries.RemoveAt(0);
-
-            // Auto-scroll to the newest entry.
             if (ActivityList.Items.Count > 0)
                 ActivityList.ScrollIntoView(ActivityList.Items[ActivityList.Items.Count - 1]);
 
-            // Show toast for errors.
+            if (category == LogCategory.Move || category == LogCategory.Game || category == LogCategory.Book)
+            {
+                _recentMoves.Add(entry);
+                while (_recentMoves.Count > 30)
+                    _recentMoves.RemoveAt(0);
+                if (RecentMovesList.Items.Count > 0)
+                    RecentMovesList.ScrollIntoView(RecentMovesList.Items[RecentMovesList.Items.Count - 1]);
+            }
+
+            if (message.Contains("Stats: W="))
+                ParseBotStats(message);
+
             if (category == LogCategory.Error)
                 ShowToast(message);
         }
 
         // Keep a convenience alias so all the preset/button handlers that call AddActivity keep working.
         private void AddActivity(string message) => AddLog(message, ClassifyLine(message));
+
+        private void ParseBotStats(string line)
+        {
+            try
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(line, @"W=(\d+)\s+L=(\d+)\s+D=(\d+)\s+Total=(\d+)");
+                if (match.Success)
+                {
+                    _wins = int.Parse(match.Groups[1].Value);
+                    _losses = int.Parse(match.Groups[2].Value);
+                    _draws = int.Parse(match.Groups[3].Value);
+                    _gamesPlayed = int.Parse(match.Groups[4].Value);
+                    LblWins.Text = _wins.ToString();
+                    LblLosses.Text = _losses.ToString();
+                    LblDraws.Text = _draws.ToString();
+                    LblGamesCount.Text = _gamesPlayed.ToString();
+                }
+            }
+            catch { }
+        }
 
         private void ShowToast(string message)
         {
