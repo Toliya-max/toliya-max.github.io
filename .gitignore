@@ -54,3 +54,6 @@ wiki/
 # Telegram bot data
 bot_data.json
 da_tokens.json
+gh_token.txt
+tg_bot.session
+telegram_bot.log

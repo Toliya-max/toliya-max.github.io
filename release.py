@@ -15,7 +15,7 @@ BOT_TOKEN = "REDACTED_TELEGRAM_BOT_TOKEN"
 ADMIN_IDS = [5237252950]
 TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 MAX_TG_SIZE = 49 * 1024 * 1024
-GITHUB_REPO = "Toliya-max/lichess-bot-releases"
+GITHUB_REPO = "Toliya-max/lichess-bot"
 GH_CLI = r"C:\Program Files\GitHub CLI\gh.exe"
 
 TG_SESSION = os.path.join(ROOT, "tg_bot.session")
@@ -173,7 +173,7 @@ def github_release(version, notify_chat=None):
         return None
 
     release_url = result.stdout.strip()
-    download_url = f"https://github.com/Toliya-max/lichess-bot-releases/releases/download/{tag}/LichessBotSetup.zip"
+    download_url = f"https://github.com/Toliya-max/lichess-bot/releases/download/{tag}/LichessBotSetup.zip"
 
     if notify_chat:
         tg_send(notify_chat, f"✅ GitHub Release: {release_url}")

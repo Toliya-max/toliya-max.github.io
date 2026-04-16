@@ -79,8 +79,19 @@ log = logging.getLogger(__name__)
 
 DA_POLL_INTERVAL = 15
 VERSION_CHECK_INTERVAL = 10 * 60
-GITHUB_RELEASES_REPO = "Toliya-max/lichess-bot-releases"
+GITHUB_RELEASES_REPO = "Toliya-max/lichess-bot"
 SETUP_ASSET_NAME = "LichessBotSetup.zip"
+
+_GH_TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gh_token.txt")
+def _get_gh_token():
+    tok = os.environ.get("LICHESS_GH_TOKEN") or os.environ.get("GH_TOKEN") or ""
+    if tok:
+        return tok.strip()
+    if os.path.exists(_GH_TOKEN_FILE):
+        with open(_GH_TOKEN_FILE, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    return ""
+GH_TOKEN = _get_gh_token()
 PROCESSED_DONATIONS_MAX = 500
 PENDING_MATCH_TTL = 24 * 3600
 PENDING_PAYMENT_TTL = 24 * 3600
@@ -150,17 +161,66 @@ def _send_setup(chat_id, version=None):
                 _save_data(data)
             return True
 
-    dl_url = data.get("download_url")
-    if dl_url:
-        kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("📥 Download ZIP", url=dl_url))
-        bot.send_message(chat_id,
-            f"📦 <b>Lichess Bot Setup v{ver}</b>\n\n{_SETUP_INSTRUCTIONS}",
-            reply_markup=kb)
-        return True
+    downloaded = _download_release_asset_sync()
+    if downloaded:
+        try:
+            with open(downloaded, "rb") as f:
+                result = bot.send_document(chat_id, f, caption=caption,
+                                            visible_file_name=SETUP_ASSET_NAME)
+                data["update_file_id"] = result.document.file_id
+                data["update_version"] = ver
+                _save_data(data)
+            return True
+        finally:
+            try: os.remove(downloaded)
+            except Exception: pass
 
-    bot.send_message(chat_id, "⚠️ No setup file available yet. Contact support.")
+    bot.send_message(chat_id,
+        f"⚠️ <b>Setup v{ver} not deliverable right now.</b>\n"
+        f"Contact support.")
     return False
+
+def _download_release_asset_sync():
+    if not GH_TOKEN:
+        log.warning("[ASSET] no GH_TOKEN; cannot download private release asset")
+        return None
+    import httpx
+    ver = data.get("update_version") or "latest"
+    tmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), f".setup_tmp_{ver}.zip")
+    try:
+        with httpx.Client(trust_env=False, timeout=120.0,
+                          proxy=DA_PROXY if DA_PROXY else None,
+                          follow_redirects=True) as c:
+            url = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/latest"
+            r = c.get(url, headers={
+                "Authorization": f"Bearer {GH_TOKEN}",
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "LichessBotTelegram/1.0",
+            })
+            r.raise_for_status()
+            info = r.json()
+            asset_id = None
+            for a in info.get("assets") or []:
+                if a.get("name") == SETUP_ASSET_NAME:
+                    asset_id = a.get("id")
+                    break
+            if asset_id is None:
+                log.error("[ASSET] asset not found in latest release")
+                return None
+            asset_url = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/assets/{asset_id}"
+            r = c.get(asset_url, headers={
+                "Authorization": f"Bearer {GH_TOKEN}",
+                "Accept": "application/octet-stream",
+                "User-Agent": "LichessBotTelegram/1.0",
+            })
+            r.raise_for_status()
+            with open(tmp, "wb") as f:
+                f.write(r.content)
+        log.info(f"[ASSET] downloaded {tmp} ({os.path.getsize(tmp)} bytes)")
+        return tmp
+    except Exception as e:
+        log.exception("[ASSET] download failed")
+        return None
 
 def _load_data():
     if os.path.exists(DATA_FILE):
@@ -1380,18 +1440,31 @@ def _parse_version(v):
     return tuple(parts[:3])
 
 async def _fetch_latest_release():
-    url = f"https://github.com/{GITHUB_RELEASES_REPO}/releases/latest"
-    headers = {"User-Agent": "LichessBotTelegram/1.0"}
-    async with _http_client(timeout=30.0, follow_redirects=False) as c:
-        r = await c.get(url, headers=headers)
-    loc = r.headers.get("location") or r.headers.get("Location") or ""
-    m = re.search(r"/tag/v?([\d.]+)", loc)
-    if not m:
+    if not GH_TOKEN:
+        log.warning("[VERSION] GH_TOKEN not set; private repo cannot be queried")
         return None, None
-    tag = m.group(1)
-    asset_url = (f"https://github.com/{GITHUB_RELEASES_REPO}/releases/"
-                 f"download/v{tag}/{SETUP_ASSET_NAME}")
-    return tag, asset_url
+    url = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/latest"
+    headers = {
+        "User-Agent": "LichessBotTelegram/1.0",
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {GH_TOKEN}",
+    }
+    async with _http_client(timeout=30.0) as c:
+        r = await c.get(url, headers=headers)
+        if r.status_code == 404:
+            return None, None
+        r.raise_for_status()
+        info = r.json()
+    tag = (info.get("tag_name") or "").lstrip("v")
+    asset_id = None
+    for a in info.get("assets") or []:
+        if a.get("name") == SETUP_ASSET_NAME:
+            asset_id = a.get("id")
+            break
+    if not tag or asset_id is None:
+        return None, None
+    asset_api = f"https://api.github.com/repos/{GITHUB_RELEASES_REPO}/releases/assets/{asset_id}"
+    return tag, asset_api
 
 async def _version_watcher():
     log.info("[VERSION] watcher started")
