@@ -866,22 +866,24 @@ namespace LichessBotSetup
         // ════════════════════════════════════════════
         //  STOCKFISH ENGINE DOWNLOAD
         // ════════════════════════════════════════════
+        private string EngineCacheDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "LichessBot-cache", "stockfish");
+
         private async Task DownloadStockfishEngine()
         {
             string engineDir = Path.Combine(_installDir, "stockfish18");
 
-            // Check if engine already exists in the extracted payload
             if (Directory.Exists(engineDir))
             {
                 var exeFiles = Directory.GetFiles(engineDir, "*.exe", SearchOption.AllDirectories);
                 if (exeFiles.Length > 0)
                 {
-                    Log($"Chess engine found in package. Skipping download.");
+                    Log($"Chess engine found in install dir. Skipping.");
                     return;
                 }
             }
 
-            // Also check for any stockfish exe in the install dir
             string[] possibleEngines = Directory.GetFiles(_installDir, "stockfish*.exe", SearchOption.AllDirectories);
             if (possibleEngines.Length > 0)
             {
@@ -889,7 +891,23 @@ namespace LichessBotSetup
                 return;
             }
 
-            Log("Downloading Stockfish 18...");
+            if (Directory.Exists(EngineCacheDir))
+            {
+                var cachedExes = Directory.GetFiles(EngineCacheDir, "stockfish*.exe");
+                if (cachedExes.Length > 0)
+                {
+                    Directory.CreateDirectory(engineDir);
+                    foreach (var src in cachedExes)
+                    {
+                        string dst = Path.Combine(engineDir, Path.GetFileName(src));
+                        File.Copy(src, dst, overwrite: true);
+                    }
+                    Log($"Chess engine restored from cache ({EngineCacheDir})");
+                    return;
+                }
+            }
+
+            Log("Downloading Stockfish 18 (one-time, will be cached)...");
             string zipPath = Path.Combine(Path.GetTempPath(), "stockfish_setup.zip");
             string tempExtract = Path.Combine(Path.GetTempPath(), "stockfish_setup_temp");
 
@@ -949,6 +967,21 @@ namespace LichessBotSetup
 
             try { File.Delete(zipPath); } catch { }
             try { Directory.Delete(tempExtract, true); } catch { }
+
+            try
+            {
+                Directory.CreateDirectory(EngineCacheDir);
+                foreach (var exe in Directory.GetFiles(engineDir, "stockfish*.exe", SearchOption.AllDirectories))
+                {
+                    string cached = Path.Combine(EngineCacheDir, Path.GetFileName(exe));
+                    File.Copy(exe, cached, overwrite: true);
+                }
+                Log($"Chess engine cached to {EngineCacheDir} for future installs");
+            }
+            catch (Exception ex)
+            {
+                Log($"Could not cache engine: {ex.Message}");
+            }
 
             Log("Stockfish engine installed!");
         }
