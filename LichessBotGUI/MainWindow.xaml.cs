@@ -7,6 +7,8 @@ using System.IO.Compression;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using System.Linq;
@@ -600,6 +602,8 @@ namespace LichessBotGUI
 
                                 EvalWhiteCol.Width = new GridLength(whitePct, GridUnitType.Star);
                                 EvalBlackCol.Width = new GridLength(blackPct, GridUnitType.Star);
+                                LblEvalWhite.Text = $"WHITE · {whitePct:0}%";
+                                LblEvalBlack.Text = $"BLACK · {blackPct:0}%";
                             }
                         }
                         catch { }
@@ -965,11 +969,62 @@ namespace LichessBotGUI
             _toastTimer?.Start();
         }
 
+        private Storyboard? _pulseStoryboard;
+
         private void SetStatus(string text, string hexColor)
         {
             LblStatus.Text = text;
             var color = (Color)ColorConverter.ConvertFromString(hexColor);
             StatusDot.Fill = new SolidColorBrush(color);
+
+            bool running = text == "Running";
+            bool alert = text == "Stopped" || text == "Error";
+            LblStatus.Foreground = new SolidColorBrush(running ? (Color)ColorConverter.ConvertFromString("#b5d894") : color);
+
+            if (running || alert)
+            {
+                Color glow = running
+                    ? (Color)ColorConverter.ConvertFromString("#8ab86a")
+                    : (Color)ColorConverter.ConvertFromString("#e85040");
+                StatusBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(0x59, glow.R, glow.G, glow.B));
+                StatusBadge.Effect = new DropShadowEffect
+                {
+                    Color = glow, BlurRadius = 14, ShadowDepth = 0,
+                    Opacity = running ? 0.55 : 0.45,
+                };
+                StatusDot.Effect = new DropShadowEffect
+                {
+                    Color = color, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.8,
+                };
+            }
+            else
+            {
+                StatusBadge.BorderBrush = (Brush)FindResource("BorderBrush");
+                StatusBadge.Effect = null;
+                StatusDot.Effect = null;
+            }
+
+            _pulseStoryboard?.Stop(StatusDot);
+            _pulseStoryboard = null;
+            if (running)
+            {
+                var anim = new DoubleAnimation
+                {
+                    From = 1.0, To = 0.45, Duration = TimeSpan.FromMilliseconds(800),
+                    AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                };
+                var sb = new Storyboard();
+                Storyboard.SetTarget(anim, StatusDot);
+                Storyboard.SetTargetProperty(anim, new PropertyPath(UIElement.OpacityProperty));
+                sb.Children.Add(anim);
+                sb.Begin(StatusDot, true);
+                _pulseStoryboard = sb;
+            }
+            else
+            {
+                StatusDot.Opacity = 1.0;
+            }
         }
 
         private void SliderSkill_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

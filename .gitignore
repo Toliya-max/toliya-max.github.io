@@ -49,6 +49,7 @@ publish_gui_tmp/
 stats.json
 raw/
 wiki/
+design-system/
 .obsidian/
 
 # Telegram bot data
