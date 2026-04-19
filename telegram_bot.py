@@ -513,6 +513,10 @@ def _show_admin_panel(cid):
         types.InlineKeyboardButton("⏳ Pending", callback_data="adm_pending"),
     )
     kb.add(
+        types.InlineKeyboardButton("🔐 DA Status", callback_data="adm_da_status"),
+        types.InlineKeyboardButton("♻️ Refresh DA", callback_data="adm_da_refresh"),
+    )
+    kb.add(
         types.InlineKeyboardButton("🔄 Refresh", callback_data="adm_refresh"),
     )
 
@@ -524,6 +528,47 @@ def _show_admin_panel(cid):
         f"📦 Version: <b>v{ver}</b>\n"
         f"📁 File: {has_file}",
         reply_markup=kb)
+
+def _show_da_status(cid):
+    tok = DONATIONALERTS_TOKEN
+    refresh = _get_da_refresh()
+    exp = _parse_jwt_exp(tok)
+    scopes = _token_scopes(tok)
+    now = int(time.time())
+    if exp:
+        days_left = (exp - now) / 86400
+        exp_str = f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(exp))} ({days_left:.1f} days)"
+    else:
+        exp_str = "unknown"
+    required = {"oauth-donation-subscribe", "oauth-donation-index", "oauth-user-show"}
+    missing = sorted(required - set(scopes))
+    bot.send_message(cid,
+        f"🔐 <b>DonationAlerts status</b>\n\n"
+        f"Client ID: <code>{_DA_CLIENT_ID}</code>\n"
+        f"Access token: {'✅ set' if tok else '❌ missing'}\n"
+        f"Refresh token: {'✅ set' if refresh else '❌ missing'}\n"
+        f"Expires: <code>{exp_str}</code>\n"
+        f"Scopes: <code>{' '.join(scopes) or '(none)'}</code>"
+        + (f"\n⚠️ Missing scopes: <code>{' '.join(missing)}</code>" if missing else ""))
+
+def _admin_refresh_da(cid):
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        ok = loop.run_until_complete(_refresh_da_token(force=True))
+        loop.close()
+    except Exception as e:
+        bot.send_message(cid, f"❌ <b>DA refresh error</b>\n<code>{e}</code>")
+        log.exception("admin DA refresh failed")
+        return
+    if ok:
+        _show_da_status(cid)
+    else:
+        bot.send_message(cid,
+            "❌ <b>DA refresh failed.</b>\n\n"
+            "Refresh token is invalid or Client Secret changed. "
+            "Run <code>python da_auth.py</code> on the server to re-authorize.")
+
 
 @bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("adm_"))
 def cb_admin(c):
@@ -614,6 +659,14 @@ def cb_admin(c):
             lines.append(f"• <code>{pid}</code> {uname} — plan:{plan} ({age}m ago)")
         bot.send_message(cid, "\n".join(lines))
 
+    elif action == "adm_da_status":
+        bot.answer_callback_query(c.id)
+        _show_da_status(cid)
+
+    elif action == "adm_da_refresh":
+        bot.answer_callback_query(c.id, "Refreshing DA token...")
+        threading.Thread(target=_admin_refresh_da, args=(cid,), daemon=True).start()
+
 @bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("genkey_"))
 def cb_genkey(c):
     cid = c.message.chat.id
@@ -646,6 +699,19 @@ def cmd_reload(m):
         f"🔄 Data reloaded.\n"
         f"Version: <b>v{ver}</b>\n"
         f"file_id: <code>{fid}...</code>")
+
+@bot.message_handler(commands=["da_status"])
+def cmd_da_status(m):
+    if not is_admin(m.chat.id):
+        return
+    _show_da_status(m.chat.id)
+
+@bot.message_handler(commands=["da_refresh"])
+def cmd_da_refresh(m):
+    if not is_admin(m.chat.id):
+        return
+    bot.send_message(m.chat.id, "♻️ Refreshing DA token...")
+    threading.Thread(target=_admin_refresh_da, args=(m.chat.id,), daemon=True).start()
 
 @bot.message_handler(commands=["release"])
 def cmd_release(m):
