@@ -4,15 +4,22 @@ import json
 import subprocess
 import asyncio
 import requests
+from dotenv import load_dotenv
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(ROOT, ".env"))
+
 DATA_FILE = os.path.join(ROOT, "bot_data.json")
 VERSION_FILE = os.path.join(ROOT, "version.txt")
 DIST_FILE = os.path.join(ROOT, "dist", "LichessBotSetup.zip")
 BUILD_SCRIPT = os.path.join(ROOT, "build_setup.ps1")
 
-BOT_TOKEN = "REDACTED_TELEGRAM_BOT_TOKEN"
-ADMIN_IDS = [5237252950]
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+if not BOT_TOKEN:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN is not set in .env")
+ADMIN_IDS = [int(x) for x in os.environ.get("TELEGRAM_ADMIN_IDS", "").split(",") if x.strip().isdigit()]
+if not ADMIN_IDS:
+    raise RuntimeError("TELEGRAM_ADMIN_IDS is not set in .env")
 TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 MAX_TG_SIZE = 49 * 1024 * 1024
 
