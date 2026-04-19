@@ -7,17 +7,36 @@ from urllib.parse import urlparse, parse_qs
 _eval_data = {}
 _eval_lock = threading.Lock()
 
+_ALLOWED_ORIGINS = frozenset({
+    "https://lichess.org",
+    "http://localhost",
+    "http://127.0.0.1",
+})
+
+def _pick_origin(request_origin: str) -> str | None:
+    if not request_origin:
+        return None
+    for allowed in _ALLOWED_ORIGINS:
+        if request_origin == allowed or request_origin.startswith(allowed + ":"):
+            return request_origin
+    return None
+
 class EvalHTTPRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Suppress standard logging to prevent console spam
         pass
 
+    def _write_cors(self, origin_header: str | None):
+        allowed = _pick_origin(origin_header or "")
+        if allowed:
+            self.send_header("Access-Control-Allow-Origin", allowed)
+            self.send_header("Vary", "Origin")
+
     def do_OPTIONS(self):
-        self.send_response(200, "ok")
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        self.send_header("Access-Control-Allow-Headers", "X-Requested-With")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_response(204, "ok")
+        self._write_cors(self.headers.get("Origin"))
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
+        self.send_header("Access-Control-Max-Age", "600")
         self.end_headers()
 
     def do_GET(self):
@@ -25,10 +44,10 @@ class EvalHTTPRequestHandler(BaseHTTPRequestHandler):
         if parsed_path.path == '/eval':
             query_components = parse_qs(parsed_path.query)
             game_id = query_components.get("game", [None])[0]
-            
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*') # Allow Lichess scripts to read
+            self._write_cors(self.headers.get("Origin"))
             self.end_headers()
 
             with _eval_lock:
@@ -37,7 +56,7 @@ class EvalHTTPRequestHandler(BaseHTTPRequestHandler):
                     response = json.dumps(data)
                 else:
                     response = json.dumps({"score": None, "depth": None, "status": "waiting"})
-            
+
             self.wfile.write(response.encode('utf-8'))
         else:
             self.send_response(404)

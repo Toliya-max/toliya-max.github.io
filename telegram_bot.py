@@ -2,20 +2,32 @@ import os
 import sys
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import asyncio
 import threading
 import time
 import re
 import telebot
 from telebot import types
+from dotenv import load_dotenv
 
-BOT_TOKEN = "REDACTED_TELEGRAM_BOT_TOKEN"
-ADMIN_IDS = [5237252950]
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+if not BOT_TOKEN:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN is not set in .env")
+
+ADMIN_IDS = [int(x) for x in os.environ.get("TELEGRAM_ADMIN_IDS", "").split(",") if x.strip().isdigit()]
+if not ADMIN_IDS:
+    raise RuntimeError("TELEGRAM_ADMIN_IDS is not set in .env (comma-separated chat ids)")
+
 DONATE_URL = "https://www.donationalerts.com/r/toliyasdgg"
 
 _DA_TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "da_tokens.json")
-_DA_CLIENT_ID = "18598"
-_DA_CLIENT_SECRET = "REDACTED_DA_CLIENT_SECRET"
+_DA_CLIENT_ID = os.environ.get("DA_CLIENT_ID", "").strip()
+_DA_CLIENT_SECRET = os.environ.get("DA_CLIENT_SECRET", "").strip()
+if not _DA_CLIENT_ID or not _DA_CLIENT_SECRET:
+    raise RuntimeError("DA_CLIENT_ID / DA_CLIENT_SECRET are not set in .env")
 _DA_SCOPE = "oauth-donation-subscribe oauth-donation-index oauth-user-show"
 
 def _get_da_token():
@@ -71,7 +83,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
@@ -85,10 +97,17 @@ PENDING_PAYMENT_TTL = 24 * 3600
 RECENT_PENDING_WINDOW = 30 * 60
 DONATIONS_LOG_MAX = 50
 AUTO_MATCH_THRESHOLD = 90
-SOFT_MATCH_THRESHOLD = 50
+SOFT_MATCH_THRESHOLD = 70
+AMOUNT_FUZZY_TOLERANCE = 1
 RECONNECT_NOTIFY_EVERY = 10
 CLEANUP_INTERVAL = 5 * 60
 _last_cleanup = 0
+
+EXPIRY_CHECK_INTERVAL = 30 * 60
+EXPIRY_THRESHOLDS = [
+    ("24h", 24 * 3600),
+    ("3h",  3 * 3600),
+]
 
 DA_PROXY = os.environ.get("LICHESS_DA_PROXY") or None
 if DA_PROXY and DA_PROXY.lower().startswith("socks://"):
@@ -276,16 +295,79 @@ def _user_label(cid):
     parts.append(f"<code>{cid}</code>")
     return " ".join(parts)
 
-_key_attempts = {}
 def _check_rate_limit(cid):
     now = time.time()
-    attempts = _key_attempts.get(cid, [])
-    attempts = [t for t in attempts if now - t < 600]
+    store = data.setdefault("key_attempts", {})
+    attempts = [t for t in store.get(str(cid), []) if now - t < 600]
     if len(attempts) >= 5:
+        store[str(cid)] = attempts
+        _save_data(data)
         return False
     attempts.append(now)
-    _key_attempts[cid] = attempts
+    store[str(cid)] = attempts
+    _save_data(data)
     return True
+
+def _notify_expiry(cid, label, expiry_dt, hours_left):
+    kb = types.InlineKeyboardMarkup()
+    kb.add(types.InlineKeyboardButton("💳 Renew via DonationAlerts", url=DONATE_URL))
+    if label == "expired":
+        header = "❌ <b>Your subscription has expired</b>"
+        body = "The bot will stop working. Renew to keep playing."
+    elif label == "3h":
+        header = "⚠️ <b>Subscription expires very soon</b>"
+        body = f"Less than 3 hours left (about {hours_left}h). Renew now to avoid downtime."
+    else:
+        header = "⏳ <b>Subscription expires soon</b>"
+        body = f"Less than 24 hours left (about {hours_left}h). Renew to stay active."
+    text = (f"{header}\n\n{body}\n\n"
+            f"Expires: <code>{expiry_dt.strftime('%Y-%m-%d %H:%M')} UTC</code>")
+    try:
+        bot.send_message(cid, text, reply_markup=kb)
+        return True
+    except Exception as e:
+        log.error(f"[EXPIRY] notify {cid} failed: {e}")
+        return False
+
+def _check_expiries():
+    import datetime as _dt
+    now = _dt.datetime.utcnow()
+    changed = False
+    for cid_s, ud in list(data.get("verified_users", {}).items()):
+        key = ud.get("key")
+        if not key:
+            continue
+        exp = L.key_expiry(key)
+        if exp is None:
+            continue
+        try:
+            cid = int(cid_s)
+        except ValueError:
+            continue
+        seconds_left = (exp - now).total_seconds()
+        sent = ud.setdefault("expiry_notified", {})
+        if seconds_left <= 0:
+            if not sent.get("expired"):
+                if _notify_expiry(cid, "expired", exp, 0):
+                    sent["expired"] = True
+                    changed = True
+            continue
+        hours_left = max(1, int(seconds_left // 3600) + 1)
+        for label, threshold in EXPIRY_THRESHOLDS:
+            if seconds_left <= threshold and not sent.get(label):
+                if _notify_expiry(cid, label, exp, hours_left):
+                    sent[label] = True
+                    changed = True
+    if changed:
+        _save_data(data)
+
+def _expiry_loop():
+    while True:
+        try:
+            _check_expiries()
+        except Exception as e:
+            log.error(f"[EXPIRY] loop error: {e}")
+        time.sleep(EXPIRY_CHECK_INTERVAL)
 
 def _cleanup_expired(force=False):
     global _last_cleanup
@@ -1037,7 +1119,7 @@ def _identify_candidates(donation):
                 elif _translit(stored) == t_dn:
                     found.append((int(cid), "da_name_translit", 50))
 
-    matched_plans = {kt for pa, kt in AMOUNT_TO_TYPE.items() if abs(amount - pa) <= 5}
+    matched_plans = {kt for pa, kt in AMOUNT_TO_TYPE.items() if abs(amount - pa) <= AMOUNT_FUZZY_TOLERANCE}
     for cid_s, pd in data.get("pending_payments", {}).items():
         ts = pd.get("time", 0)
         if now - ts > RECENT_PENDING_WINDOW:
@@ -1067,7 +1149,7 @@ def _resolve_key_type(amount):
     if key_type:
         return key_type, False
     for pa, kt in AMOUNT_TO_TYPE.items():
-        if abs(amount - pa) <= 5:
+        if abs(amount - pa) <= AMOUNT_FUZZY_TOLERANCE:
             return kt, True
     return None, False
 
@@ -1545,6 +1627,9 @@ if __name__ == "__main__":
 
     threading.Thread(target=_run_rest, daemon=True).start()
     log.info(f"DonationAlerts REST poller started (interval={DA_POLL_INTERVAL}s)")
+
+    threading.Thread(target=_expiry_loop, daemon=True).start()
+    log.info(f"Expiry notifier started (interval={EXPIRY_CHECK_INTERVAL}s)")
 
     _exp = _parse_jwt_exp(DONATIONALERTS_TOKEN)
     _exp_str = time.strftime('%Y-%m-%d', time.localtime(_exp)) if _exp else 'unknown'

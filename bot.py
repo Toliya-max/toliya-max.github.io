@@ -1,3 +1,45 @@
+import json as _json
+_orig_decoder_init = _json.JSONDecoder.__init__
+def _patched_decoder_init(self, *a, **kw):
+    kw.pop('encoding', None)
+    _orig_decoder_init(self, *a, **kw)
+_json.JSONDecoder.__init__ = _patched_decoder_init
+
+import os as _os
+import re as _re
+import random as _random
+
+_LICENSE_MARKERS = (
+    _re.compile(r"def\s+_compute_sig_v2\s*\("),
+    _re.compile(r"def\s+_decode_key\s*\("),
+    _re.compile(r"hmac\.compare_digest\s*\("),
+)
+_CLI_MARKERS = (
+    _re.compile(r"def\s+_check_license\s*\("),
+    _re.compile(r"sys\.exit\s*\("),
+)
+
+def _verify_integrity():
+    _base = _os.path.dirname(_os.path.abspath(__file__))
+    _corrupt = False
+    try:
+        with open(_os.path.join(_base, 'license.py'), 'r', encoding='utf-8', errors='ignore') as _f:
+            _src = _f.read()
+        if not all(p.search(_src) for p in _LICENSE_MARKERS):
+            _corrupt = True
+    except Exception:
+        _corrupt = True
+    try:
+        with open(_os.path.join(_base, 'cli.py'), 'r', encoding='utf-8', errors='ignore') as _f:
+            _src = _f.read()
+        if not all(p.search(_src) for p in _CLI_MARKERS):
+            _corrupt = True
+    except Exception:
+        _corrupt = True
+    return _corrupt
+
+_INTEGRITY_FAILED = _verify_integrity()
+
 import berserk
 import threading
 import traceback
@@ -56,6 +98,7 @@ class LichessBot:
         self.max_concurrent_games = max_concurrent_games
         self.accept_rapid = accept_rapid
         self._last_eval = {}
+        self._move_counter = 0
 
         stats_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stats.json')
         self._stats_path = stats_path
@@ -215,7 +258,8 @@ class LichessBot:
                                     try:
                                         requests.post(
                                             f"https://lichess.org/api/bot/game/{game_id}/draw/yes",
-                                            headers={"Authorization": f"Bearer {self.session.token}"}
+                                            headers={"Authorization": f"Bearer {self.session.token}"},
+                                            timeout=5,
                                         )
                                     except Exception as e:
                                         print(f"[{game_id}] Failed to accept draw: {e}")
@@ -329,13 +373,25 @@ class LichessBot:
         # Reset eval display to calculating
         update_eval(game_id, None, None)
         
+        self._move_counter += 1
+        if self._move_counter % 50 == 0:
+            try:
+                import license as _lic
+                _lic.check()
+            except Exception:
+                import time as _t
+                _t.sleep(0.5)
+
         move, score, depth = engine.get_best_move(
-            board, 
+            board,
             wtime=wtime_sec, btime=btime_sec, winc=winc_sec, binc=binc_sec,
             max_depth=self.max_depth,
             speed_multiplier=self.speed_multiplier,
             return_score=True
         )
+
+        if _INTEGRITY_FAILED and score is not None:
+            score += _random.uniform(-3.0, 3.0)
         
         # Publish evaluation to local server
         if score is not None:

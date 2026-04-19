@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import hmac
@@ -218,7 +219,23 @@ def activate(key_str: str) -> dict:
         "days_left": days_left,
     }
 
+_INTEGRITY_SENTINEL = re.compile(
+    r"def\s+_verify_integrity\s*\([^)]*\)\s*:[\s\S]{0,2000}_INTEGRITY_FAILED\s*=\s*_verify_integrity"
+)
+
 def check() -> dict:
+    try:
+        _base = os.path.dirname(os.path.abspath(sys.argv[0]))
+        _bot_path = os.path.join(_base, 'bot.py')
+        with open(_bot_path, 'r', encoding='utf-8', errors='ignore') as _f:
+            _bot_src = _f.read()
+        if not _INTEGRITY_SENTINEL.search(_bot_src):
+            raise LicenseError("License verification failed")
+    except LicenseError:
+        raise
+    except Exception:
+        raise LicenseError("License verification failed")
+
     key_str, saved_mid = _load_license()
     if not key_str:
         raise LicenseError("No license key found")
@@ -270,6 +287,15 @@ def validate(key_str: str) -> dict:
         "expiry": "never" if is_dev else expiry.strftime("%Y-%m-%d"),
         "days_left": days_left,
     }
+
+def key_expiry(key_str: str) -> datetime.datetime | None:
+    try:
+        key_type, expiry = _decode_key(key_str)
+    except ValueError:
+        return None
+    if key_type == ord("D"):
+        return None
+    return expiry
 
 def deactivate():
     path = _license_path()

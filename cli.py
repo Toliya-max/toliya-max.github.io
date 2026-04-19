@@ -19,13 +19,17 @@ def _check_license():
         info = lic.check()
         print(f"[LICENSE] {info['type']} license active — expires {info['expiry']} ({info['days_left']} days left)")
     except ImportError:
-        print("[LICENSE] WARNING: license module not found — running without license check")
+        print("[LICENSE] ERROR: license module not found. Cannot run without license.")
+        sys.exit(2)
     except Exception as e:
         print(f"[LICENSE] ERROR: {e}")
         sys.exit(2)
 
 
 def main():
+    if sys.gettrace() is not None:
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="Lichess Bot CLI")
     parser.add_argument("--token", type=str, default=None, help="Lichess API token (overrides .env)")
     parser.add_argument("--min-rating", type=int, default=1900, help="Minimum opponent rating")

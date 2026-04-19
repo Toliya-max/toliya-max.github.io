@@ -5,11 +5,17 @@ import webbrowser
 import requests
 import json
 import os
+from dotenv import load_dotenv
 
-CLIENT_ID = "18598"
-CLIENT_SECRET = "REDACTED_DA_CLIENT_SECRET"
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+CLIENT_ID = os.environ.get("DA_CLIENT_ID", "").strip()
+CLIENT_SECRET = os.environ.get("DA_CLIENT_SECRET", "").strip()
+if not CLIENT_ID or not CLIENT_SECRET:
+    raise SystemExit("ERROR: DA_CLIENT_ID / DA_CLIENT_SECRET are not set in .env")
+
 REDIRECT_URI = "http://localhost:7272/callback"
-SCOPE = "oauth-donation-subscribe oauth-user-show"
+SCOPE = "oauth-donation-subscribe oauth-donation-index oauth-user-show"
 
 auth_code = None
 
@@ -26,7 +32,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, *args): pass
 
-# 1. Open browser for auth
 auth_url = (
     f"https://www.donationalerts.com/oauth/authorize?"
     f"client_id={CLIENT_ID}&redirect_uri={urllib.parse.quote(REDIRECT_URI)}"
@@ -35,7 +40,6 @@ auth_url = (
 print("Opening browser...")
 webbrowser.open(auth_url)
 
-# 2. Wait for callback
 server = http.server.HTTPServer(("localhost", 7272), Handler)
 server.handle_request()
 
@@ -45,21 +49,23 @@ if not auth_code:
 
 print(f"Auth code: {auth_code[:10]}...")
 
-# 3. Exchange code for token
-resp = requests.post("https://www.donationalerts.com/oauth/token", data={
-    "grant_type": "authorization_code",
-    "client_id": CLIENT_ID,
-    "client_secret": CLIENT_SECRET,
-    "redirect_uri": REDIRECT_URI,
-    "code": auth_code,
-})
+resp = requests.post(
+    "https://www.donationalerts.com/oauth/token",
+    data={
+        "grant_type": "authorization_code",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "redirect_uri": REDIRECT_URI,
+        "code": auth_code,
+    },
+    timeout=30,
+)
 resp.raise_for_status()
 tokens = resp.json()
 
 print(f"Access token: {tokens['access_token'][:20]}...")
 print(f"Refresh token: {tokens.get('refresh_token', 'none')[:20]}...")
 
-# 4. Save tokens
 token_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "da_tokens.json")
 with open(token_file, "w") as f:
     json.dump(tokens, f, indent=2)

@@ -114,7 +114,22 @@ class ChessEngine:
         limit = chess.engine.Limit(**limit_kwargs)
 
         if return_score:
-            info = self.engine.analyse(board, limit)
+            is_critical = False
+            if board.is_check() or len(list(board.legal_moves)) <= 5:
+                is_critical = True
+
+            if is_critical and self.is_unleashed:
+                try:
+                    multi_info = self.engine.analyse(board, limit, multipv=3)
+                    if isinstance(multi_info, list) and len(multi_info) > 0:
+                        info = multi_info[0]
+                    else:
+                        info = multi_info
+                except Exception:
+                    info = self.engine.analyse(board, limit)
+            else:
+                info = self.engine.analyse(board, limit)
+
             best_move = info.get("pv", [None])[0]
 
             score_obj = info.get("score")

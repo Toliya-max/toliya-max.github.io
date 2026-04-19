@@ -286,12 +286,20 @@ namespace LichessBotGUI
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "LichessBot-cache", "stockfish");
 
+        private static string XmlEscape(string s) =>
+            (s ?? string.Empty)
+                .Replace("&", "&amp;")
+                .Replace("<", "&lt;")
+                .Replace(">", "&gt;")
+                .Replace("\"", "&quot;")
+                .Replace("'", "&apos;");
+
         private void ShowWinToast(string title, string body, int timeoutMs = 6000)
         {
             try
             {
-                string safeTitle = title.Replace("'", "''").Replace("\"", "");
-                string safeBody = body.Replace("'", "''").Replace("\"", "");
+                string safeTitle = XmlEscape(title);
+                string safeBody = XmlEscape(body);
                 string ps =
                     "[void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime];" +
                     "[void][Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom.XmlDocument,ContentType=WindowsRuntime];" +
