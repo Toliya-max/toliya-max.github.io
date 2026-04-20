@@ -61,18 +61,20 @@ class ChessEngine:
            Stockfish allocates time optimally based on game phase and complexity.
         3. Fixed-time fallback: used only when no clock info is available.
         """
-        # --- Opening book ---
         if self.book_path and os.path.exists(self.book_path):
             try:
                 with chess.polyglot.MemoryMappedReader(self.book_path) as reader:
-                    entry = reader.weighted_choice(board)  # weighted_choice picks better moves more often
+                    entry = reader.weighted_choice(board)
                     if entry:
                         print(f"[BOOK] Book move: {entry.move}")
                         if return_score:
                             return entry.move, 0.0, 0
                         return entry.move
-            except Exception:
-                pass
+            except IndexError:
+                if getattr(board, "chess960", False):
+                    print(f"[BOOK] no entry for 960 position (expected) — falling back to engine")
+            except Exception as e:
+                print(f"[BOOK] WARNING: book lookup failed: {type(e).__name__}: {e} — falling back to engine")
 
         if wtime is not None and btime is not None:
             # Scale the clock by the speed multiplier before passing to Stockfish.

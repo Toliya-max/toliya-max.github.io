@@ -54,6 +54,7 @@ def main():
     parser.add_argument("--move-overhead", type=int, default=100, help="Move overhead in ms — safety buffer for network latency (default: 100)")
     parser.add_argument("--max-concurrent", type=int, default=1, help="Max simultaneous games (default: 1)")
     parser.add_argument("--accept-rapid", action="store_true", help="Accept rapid games up to 15 minutes (default: blitz/bullet only)")
+    parser.add_argument("--include-chess960", action="store_true", default=False, help="Include Chess960 challenges in auto-challenger (randomly alternates with standard)")
     args = parser.parse_args()
 
     _check_license()
@@ -106,7 +107,8 @@ def main():
         greeting=args.greeting,
         gg_message=args.gg_message,
         max_concurrent_games=args.max_concurrent,
-        accept_rapid=args.accept_rapid
+        accept_rapid=args.accept_rapid,
+        include_chess960=args.include_chess960
     )
 
     try:

@@ -70,7 +70,7 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.4.2";
+        private const string CurrentVersion = "1.4.3";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;
@@ -661,6 +661,7 @@ namespace LichessBotGUI
                         SliderSkill.Value = config.SkillLevel;
                         SliderSpeed.Value = config.MoveSpeed;
                         SliderDepth.Value = double.TryParse(config.MaxDepth, out double d) ? d : 0;
+                        ChkIncludeChess960.IsChecked = config.IncludeChess960;
                     }
                 }
             }
@@ -689,7 +690,8 @@ namespace LichessBotGUI
                     UseNNUE = ChkNNUE.IsChecked == true,
                     SkillLevel = SliderSkill.Value,
                     MoveSpeed = SliderSpeed.Value,
-                    MaxDepth = ((int)SliderDepth.Value).ToString()
+                    MaxDepth = ((int)SliderDepth.Value).ToString(),
+                    IncludeChess960 = ChkIncludeChess960.IsChecked == true
                 };
                 
                 string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
@@ -831,6 +833,9 @@ namespace LichessBotGUI
 
             if (ChkNNUE.IsChecked == false)
                 parts.Add("--no-nnue");
+
+            if (ChkIncludeChess960.IsChecked == true)
+                parts.Add("--include-chess960");
 
             return string.Join(" ", parts);
         }
@@ -1351,6 +1356,7 @@ namespace LichessBotGUI
         public string Greeting { get; set; } = "glhf! 🤖";
         public string GGMessage { get; set; } = "gg wp!";
         public bool AcceptRematch { get; set; } = true;
+        public bool IncludeChess960 { get; set; } = false;
     }
 
     public class LichessPlayingResponse

@@ -63,12 +63,14 @@ except Exception as e:
     print(f"Warning: Could not start eval server: {e}")
 
 class LichessBot:
-    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!", max_concurrent_games=1, accept_rapid=False):
+    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!", max_concurrent_games=1, accept_rapid=False, include_chess960=False):
         if not token:
             raise ValueError("LICHESS_API_TOKEN is not set.")
         
         self.session = berserk.TokenSession(token)
         self.client = berserk.Client(session=self.session)
+        self._challenger_session = berserk.TokenSession(token)
+        self._challenger_client = berserk.Client(session=self._challenger_session)
         self.active_games = set()  # Track active games internally
         self.pending_challenges = set() # Track challenges we sent
         
@@ -97,6 +99,7 @@ class LichessBot:
         self.gg_message = gg_message
         self.max_concurrent_games = max_concurrent_games
         self.accept_rapid = accept_rapid
+        self.include_chess960 = include_chess960
         self._last_eval = {}
         self._move_counter = 0
 
@@ -161,7 +164,6 @@ class LichessBot:
 
     def handle_game(self, game_id):
         print(f"Starting game thread for game {game_id}")
-        self.active_games.add(game_id)
         engine = EngineManager.get_engine(
             skill_level=self.skill_level,
             engine_path=self.engine_path,
@@ -174,8 +176,8 @@ class LichessBot:
         board = chess.Board()
         color = None
         is_chess960 = False
-        
-        
+
+
         try:
             retry_count = 0
             while True:
@@ -183,26 +185,17 @@ class LichessBot:
                     for event in self.client.bots.stream_game_state(game_id):
                         retry_count = 0 # reset on successful event
                         if event['type'] == 'gameFull':
-                            # Detect Chess960
                             variant = event.get('variant', {}).get('key', 'standard')
                             is_chess960 = (variant == 'chess960')
-                            
                             if is_chess960:
-                                print(f"[{game_id}] Chess960 game detected! Configuring engine...")
-                                try:
-                                    engine.engine.configure({"UCI_Chess960": True})
-                                except:
-                                    pass
-                            
+                                print(f"[{game_id}] Chess960 game detected. Stockfish 18 auto-manages UCI_Chess960 from position.")
+
                             # Get initial FEN (important for Chess960)
                             initial_fen = event.get('initialFen', 'startpos')
                             if initial_fen and initial_fen != 'startpos':
-                                board = chess.Board(initial_fen)
+                                board = chess.Board(initial_fen, chess960=is_chess960)
                             else:
-                                board = chess.Board()
-                            
-                            if is_chess960:
-                                board.chess960 = True
+                                board = chess.Board(chess960=is_chess960)
                             
                             # Parse initial state
                             if event['white'].get('id') == self.bot_id:
@@ -268,13 +261,10 @@ class LichessBot:
 
                             moves = event.get('moves', '').split(' ')
                             if moves and moves[0]:
-                                # Reconstruct board from initial position
                                 if initial_fen and initial_fen != 'startpos':
-                                    board = chess.Board(initial_fen)
+                                    board = chess.Board(initial_fen, chess960=is_chess960)
                                 else:
-                                    board = chess.Board()
-                                if is_chess960:
-                                    board.chess960 = True
+                                    board = chess.Board(chess960=is_chess960)
                                 for uci_move in moves:
                                     board.push_uci(uci_move)
 
@@ -457,7 +447,7 @@ class LichessBot:
                     continue
                 
                 # Fetch currently online bots (gives a few dozen at a time)
-                online_bots = list(self.client.bots.get_online_bots())
+                online_bots = list(self._challenger_client.bots.get_online_bots())
                 if online_bots:
                     # Filter out ourselves and only pick high rated bots (>= 2500 blitz)
                     targets = []
@@ -481,12 +471,13 @@ class LichessBot:
                         for target in chosen_targets:
                             if self.stop_event.is_set() or len(self.active_games) >= self.max_concurrent_games:
                                 break # abort if slots are full
-                                
+
                             target_id = target['id']
                             time_format = "Bullet" if self.tc_minutes < 3 else "Blitz" if self.tc_minutes <= 5 else "Rapid"
-                            print(f"Challenger: Sending {'Rated' if self.rated_challenges else 'Casual'} {self.tc_minutes}+{self.tc_increment} {time_format} challenge to bot => {target_id}")
+                            variant = random.choice(['standard', 'chess960']) if self.include_chess960 else 'standard'
+                            print(f"Challenger: Sending {'Rated' if self.rated_challenges else 'Casual'} {self.tc_minutes}+{self.tc_increment} {time_format} {variant} challenge to bot => {target_id}")
                             try:
-                                response = self.client.challenges.create(target_id, self.rated_challenges, clock_limit=clock_limit, clock_increment=clock_increment)
+                                response = self._challenger_client.challenges.create(target_id, self.rated_challenges, clock_limit=clock_limit, clock_increment=clock_increment, variant=variant)
                                 if 'challenge' in response and 'id' in response['challenge']:
                                     self.pending_challenges.add(response['challenge']['id'])
                                 time.sleep(2.0) # 2-second delay between sending to respect Lichess API limits
@@ -559,12 +550,17 @@ class LichessBot:
                                 print(f"Could not decline challenge {challenge_id}: {e}")
                             
                     elif event['type'] == 'gameStart':
-                        self.games_played += 1
                         game_id = event['game']['gameId']
-                        print(f"Game started: {game_id}. (Played: {self.games_played}/{self.max_games or 'inf'}, Active: {len(self.active_games)+1}/{self.max_concurrent_games})")
 
-                        # Cancel pending challenges only if we're at capacity
-                        if len(self.active_games) + 1 >= self.max_concurrent_games:
+                        if game_id in self.active_games:
+                            print(f"Duplicate gameStart for {game_id} — already handling, skipping.")
+                            continue
+
+                        self.active_games.add(game_id)
+                        self.games_played += 1
+                        print(f"Game started: {game_id}. (Played: {self.games_played}/{self.max_games or 'inf'}, Active: {len(self.active_games)}/{self.max_concurrent_games})")
+
+                        if len(self.active_games) >= self.max_concurrent_games:
                             for pending_id in list(self.pending_challenges):
                                 try:
                                     self.client.challenges.cancel(pending_id)
@@ -572,15 +568,14 @@ class LichessBot:
                                 except Exception as e:
                                     print(f"Failed to cancel {pending_id}: {e}")
                             self.pending_challenges.clear()
-                        
-                        # Open the game in the default browser
+
                         game_url = f"https://lichess.org/{game_id}"
                         try:
                             webbrowser.open(game_url, new=2)
                             print(f"Opened game in browser: {game_url}")
                         except Exception as e:
                             print(f"Failed to open browser: {e}")
-                        
+
                         threading.Thread(target=self.handle_game, args=(game_id,), daemon=True).start()
             except BaseException as e:
                 if self.stop_event.is_set():

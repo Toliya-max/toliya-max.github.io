@@ -191,6 +191,12 @@
                                     <CheckBox x:Name="ChkRematch" IsChecked="True" HorizontalAlignment="Right" Style="{StaticResource ToggleSwitch}"/>
                                 </DockPanel>
 
+                                <DockPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Include Chess960 challenges" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"
+                                               ToolTip="Auto-challenger will randomly send Chess960 or standard challenges"/>
+                                    <CheckBox x:Name="ChkIncludeChess960" IsChecked="False" HorizontalAlignment="Right" Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
                                 <TextBlock Text="Min Opponent Rating" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
                                 <TextBox x:Name="TxtRating" Text="1900" Style="{StaticResource RoundedTextBox}" Margin="0,0,0,10"/>
 
