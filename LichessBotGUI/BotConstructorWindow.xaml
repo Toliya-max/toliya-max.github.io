@@ -1,0 +1,758 @@
+<Window x:Class="LichessBotGUI.BotConstructorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bot Constructor" Height="700" Width="1080"
+        MinHeight="580" MinWidth="880"
+        Background="{StaticResource BgDarkBrush}"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard>
+                <Storyboard>
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.4">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut"/>
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </Window.Triggers>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+<Border Grid.Row="0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="24,14">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.3">
+                    <GradientStop Color="#FF120e08" Offset="0"/>
+                    <GradientStop Color="#FF1a1410" Offset="0.5"/>
+                    <GradientStop Color="#FF0e0b07" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Grid>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="B O T   C O N S T R U C T O R" FontSize="11" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}" Opacity="0.85"/>
+                    <TextBlock Text="Profile Manager" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0"/>
+                </StackPanel>
+                <Rectangle Height="1" VerticalAlignment="Bottom" Margin="0,0,0,-15" HorizontalAlignment="Stretch">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#00d4985a" Offset="0"/>
+                            <GradientStop Color="#59d4985a" Offset="0.2"/>
+                            <GradientStop Color="#59d4985a" Offset="0.8"/>
+                            <GradientStop Color="#00d4985a" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+            </Grid>
+        </Border>
+<Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+<Border Grid.Column="0" Background="{StaticResource BgPanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+                <DockPanel>
+<TextBlock x:Name="LblProfileCount" DockPanel.Dock="Top"
+                               Text="0 PROFILES" FontSize="9" FontWeight="Bold"
+                               Foreground="{StaticResource TextSecondaryBrush}" Opacity="0.5"
+                               Margin="14,12,14,6"/>
+<StackPanel DockPanel.Dock="Bottom" Margin="10,8,10,10">
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,8"/>
+                        <UniformGrid Columns="2" Margin="0,0,0,6">
+                            <Button x:Name="BtnNewProfile" Content="+ New" Click="BtnNewProfile_Click"
+                                    Style="{StaticResource PresetButton}" Margin="0,0,3,0"/>
+                            <Button x:Name="BtnDuplicateProfile" Content="⧉ Copy" Click="BtnDuplicateProfile_Click"
+                                    Style="{StaticResource PresetButton}" Margin="3,0,0,0"/>
+                        </UniformGrid>
+                        <Button x:Name="BtnDeleteProfile" Content="✕ Delete Profile" Click="BtnDeleteProfile_Click"
+                                Style="{StaticResource PresetButton}" Margin="0,0,0,6"/>
+                        <UniformGrid Columns="2">
+                            <Button x:Name="BtnImportProfile" Content="↓ Import" Click="BtnImportProfile_Click"
+                                    Style="{StaticResource PresetButton}" Margin="0,0,3,0"/>
+                            <Button x:Name="BtnExportProfile" Content="↑ Export" Click="BtnExportProfile_Click"
+                                    Style="{StaticResource PresetButton}" Margin="3,0,0,0"/>
+                        </UniformGrid>
+                    </StackPanel>
+<ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ListBox x:Name="ProfileList" Background="Transparent" BorderThickness="0"
+                                 Margin="6,4,6,4"
+                                 SelectionChanged="ProfileList_SelectionChanged">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,0,0,4"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <ContentPresenter/>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+<Grid Grid.Column="1" Margin="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TabControl x:Name="EditorTabs" Background="Transparent" BorderThickness="0" Margin="12,12,12,0">
+<TabItem Header="Identity">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8,16,8,16">
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="I D E N T I T Y" FontSize="10" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}" Opacity="0.65" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="BtnResetIdentity" Text="Reset to defaults"
+                                               FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                               Cursor="Hand" VerticalAlignment="Center"
+                                               MouseLeftButtonDown="BtnResetIdentity_Click"/>
+                                </Grid>
+                                <Rectangle Height="1" Margin="0,0,0,20">
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#33d4985a" Offset="0"/>
+                                            <GradientStop Color="#00d4985a" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+
+                                <TextBlock Text="Profile Name" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                <TextBox x:Name="TxtProfileName" Style="{StaticResource RoundedTextBox}" Margin="0,0,0,16"
+                                         TextChanged="TxtProfileName_TextChanged"/>
+
+                                <TextBlock Text="Color Tag" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+                                <WrapPanel x:Name="ColorSwatchPanel" Margin="0,0,0,16">
+                                    <RadioButton x:Name="SwatchAmber" Tag="#d4985a" GroupName="ColorTag" Margin="0,0,6,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#d4985a" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#d4985a" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                    <RadioButton x:Name="SwatchGreen" Tag="#629924" GroupName="ColorTag" Margin="0,0,6,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#629924" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#629924" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                    <RadioButton x:Name="SwatchBlue" Tag="#4a8ab8" GroupName="ColorTag" Margin="0,0,6,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#4a8ab8" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#4a8ab8" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                    <RadioButton x:Name="SwatchPurple" Tag="#9b5cc4" GroupName="ColorTag" Margin="0,0,6,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#9b5cc4" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#9b5cc4" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                    <RadioButton x:Name="SwatchRed" Tag="#c9372c" GroupName="ColorTag" Margin="0,0,6,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#c9372c" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#c9372c" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                    <RadioButton x:Name="SwatchGold" Tag="#e8c87a" GroupName="ColorTag" Margin="0,0,6,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#e8c87a" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#e8c87a" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                    <RadioButton x:Name="SwatchGray" Tag="#8a8784" GroupName="ColorTag" Margin="0,0,6,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#8a8784" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#8a8784" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                    <RadioButton x:Name="SwatchWhite" Tag="#e8e6e3" GroupName="ColorTag" Margin="0,0,0,0"
+                                                 Checked="ColorSwatch_Checked" Style="{x:Null}"
+                                                 Width="24" Height="24" Cursor="Hand">
+                                        <RadioButton.Template>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Ellipse Width="24" Height="24" Fill="#e8e6e3" Cursor="Hand">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="#e8e6e3" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </ControlTemplate>
+                                        </RadioButton.Template>
+                                    </RadioButton>
+                                </WrapPanel>
+
+                                <TextBlock Text="Lichess API Token" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <PasswordBox x:Name="PwdApiToken" Grid.Column="0" Padding="12,8" FontSize="13"
+                                                 Background="{StaticResource BgCardBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                                 PasswordChanged="PwdApiToken_PasswordChanged"/>
+                                    <Button x:Name="BtnToggleToken" Grid.Column="1" Content="Show" Margin="6,0,0,0"
+                                            Width="48" Style="{StaticResource PresetButton}"
+                                            Click="BtnToggleToken_Click"/>
+                                </Grid>
+                                <TextBox x:Name="TxtApiTokenVisible" Style="{StaticResource RoundedTextBox}"
+                                         Margin="0,0,0,8" Visibility="Collapsed"
+                                         TextChanged="TxtApiTokenVisible_TextChanged"/>
+                                <TextBlock Text="Token is stored locally in .env and never transmitted to external servers."
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,0"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+<TabItem Header="Engine">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8,16,8,16">
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="E N G I N E" FontSize="10" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}" Opacity="0.65" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="BtnResetEngine" Text="Reset to defaults"
+                                               FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                               Cursor="Hand" VerticalAlignment="Center"
+                                               MouseLeftButtonDown="BtnResetEngine_Click"/>
+                                </Grid>
+                                <Rectangle Height="1" Margin="0,0,0,20">
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#33d4985a" Offset="0"/>
+                                            <GradientStop Color="#00d4985a" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+
+                                <TextBlock Text="Engine Path" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                <DockPanel Margin="0,0,0,14">
+                                    <Button Content="..." DockPanel.Dock="Right" Width="34" Margin="6,0,0,0"
+                                            Style="{StaticResource PresetButton}" Click="BtnBrowseEnginePath_Click"/>
+                                    <TextBox x:Name="TxtEnginePath2" Style="{StaticResource RoundedTextBox}"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock Text="Use NNUE" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkUseNNUE" HorizontalAlignment="Right" Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Skill Level" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <TextBlock x:Name="LblSkillVal" Text="20" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold"/>
+                                </DockPanel>
+                                <Slider x:Name="SliderSkill2" Minimum="0" Maximum="20" Value="20"
+                                        IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,14"
+                                        ValueChanged="SliderSkill2_ValueChanged"/>
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Move Speed" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <TextBlock x:Name="LblSpeedVal" Text="1.0x" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold"/>
+                                </DockPanel>
+                                <Slider x:Name="SliderSpeed2" Minimum="0.1" Maximum="3.0" Value="1.0"
+                                        IsSnapToTickEnabled="True" TickFrequency="0.1" Margin="0,0,0,14"
+                                        ValueChanged="SliderSpeed2_ValueChanged"/>
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Max Depth" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <TextBlock x:Name="LblDepthVal" Text="∞ (engine decides)" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold"/>
+                                </DockPanel>
+                                <Slider x:Name="SliderDepth2" Minimum="0" Maximum="50" Value="0"
+                                        IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,14"
+                                        ValueChanged="SliderDepth2_ValueChanged"/>
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="CPU Threads" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <TextBlock x:Name="LblThreadsVal" Text="Auto" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold"/>
+                                </DockPanel>
+                                <Slider x:Name="SliderThreads2" Minimum="0" Maximum="8" Value="0"
+                                        IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,14"
+                                        ValueChanged="SliderThreads2_ValueChanged"/>
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Hash Table (MB)" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <TextBlock x:Name="LblHashVal" Text="256" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold"/>
+                                </DockPanel>
+                                <Slider x:Name="SliderHash2" Minimum="16" Maximum="1024" Value="256"
+                                        IsSnapToTickEnabled="True" TickFrequency="16" Margin="0,0,0,14"
+                                        ValueChanged="SliderHash2_ValueChanged"/>
+
+                                <TextBlock Text="Move Overhead (ms)" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"
+                                           ToolTip="Network latency buffer"/>
+                                <TextBox x:Name="TxtMoveOverhead2" Style="{StaticResource RoundedTextBox}" Margin="0,0,0,14"/>
+
+                                <DockPanel Opacity="0.4">
+                                    <TextBlock Text="Ponder  (Coming soon)" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkPonder2" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}" IsEnabled="False"/>
+                                </DockPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+<TabItem Header="Behavior">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8,16,8,16">
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="B E H A V I O R" FontSize="10" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}" Opacity="0.65" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="BtnResetBehavior" Text="Reset to defaults"
+                                               FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                               Cursor="Hand" VerticalAlignment="Center"
+                                               MouseLeftButtonDown="BtnResetBehavior_Click"/>
+                                </Grid>
+                                <Rectangle Height="1" Margin="0,0,0,20">
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#33d4985a" Offset="0"/>
+                                            <GradientStop Color="#00d4985a" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock Text="Auto Challenger" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkAutoChallenger" IsChecked="True" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock Text="Rated Matches" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkRated2" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,8">
+                                    <TextBlock Text="Auto-Resign" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkAutoResign2" IsChecked="True" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"
+                                              Checked="ChkAutoResign2_Changed" Unchecked="ChkAutoResign2_Changed"/>
+                                </DockPanel>
+
+                                <TextBlock Text="Resign Threshold" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                <TextBox x:Name="TxtResignThreshold2" Text="-5.0" Style="{StaticResource RoundedTextBox}"
+                                         Margin="0,0,0,14"
+                                         LostFocus="TxtResignThreshold2_LostFocus"/>
+
+                                <TextBlock Text="Min Opponent Rating" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                <TextBox x:Name="TxtMinRating2" Text="1900" Style="{StaticResource RoundedTextBox}"
+                                         Margin="0,0,0,14"
+                                         LostFocus="TxtMinRating2_LostFocus"/>
+
+                                <TextBlock Text="Max Games (0 = unlimited)" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                <TextBox x:Name="TxtMaxGames2" Text="0" Style="{StaticResource RoundedTextBox}"
+                                         Margin="0,0,0,14"
+                                         LostFocus="TxtMaxGames2_LostFocus"/>
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Max Concurrent Games" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <TextBlock x:Name="LblConcurrentVal" Text="1" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold"/>
+                                </DockPanel>
+                                <Slider x:Name="SliderConcurrent" Minimum="1" Maximum="4" Value="1"
+                                        IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,14"
+                                        ValueChanged="SliderConcurrent_ValueChanged"/>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock Text="Accept Rapid (up to 15+10)" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkAcceptRapid" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock Text="Include Chess960 challenges" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"
+                                               ToolTip="Auto-challenger will randomly send Chess960 or standard challenges"/>
+                                    <CheckBox x:Name="ChkIncludeChess960" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock Text="Open games in browser" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"
+                                               ToolTip="Open each new game in your default browser (off by default — decide manually)"/>
+                                    <CheckBox x:Name="ChkAutoOpenGame" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock Text="Accept Rematch" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkAcceptRematch" IsChecked="True" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+<TabItem Header="Time Control">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8,16,8,16">
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="T I M E   C O N T R O L" FontSize="10" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}" Opacity="0.65" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="BtnResetTC" Text="Reset to defaults"
+                                               FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                               Cursor="Hand" VerticalAlignment="Center"
+                                               MouseLeftButtonDown="BtnResetTC_Click"/>
+                                </Grid>
+                                <Rectangle Height="1" Margin="0,0,0,20">
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#33d4985a" Offset="0"/>
+                                            <GradientStop Color="#00d4985a" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+
+                                <UniformGrid Columns="3" Margin="0,0,0,6">
+                                    <Button x:Name="BtnTCHyper" Content="0.5+0" Click="BtnTCPreset_Click" Tag="Hyper"
+                                            Style="{StaticResource PresetButton}" Margin="0,0,4,0"/>
+                                    <Button x:Name="BtnTCBullet" Content="1+0" Click="BtnTCPreset_Click" Tag="Bullet"
+                                            Style="{StaticResource PresetButton}" Margin="2,0,2,0"/>
+                                    <Button x:Name="BtnTCBlitz" Content="3+0" Click="BtnTCPreset_Click" Tag="Blitz"
+                                            Style="{StaticResource PresetButton}" Margin="4,0,0,0"/>
+                                </UniformGrid>
+                                <UniformGrid Columns="3" Margin="0,0,0,16">
+                                    <Button x:Name="BtnTCRapid" Content="10+0" Click="BtnTCPreset_Click" Tag="Rapid"
+                                            Style="{StaticResource PresetButton}" Margin="0,0,4,0"/>
+                                    <Button x:Name="BtnTCClassical" Content="15+10" Click="BtnTCPreset_Click" Tag="Classical"
+                                            Style="{StaticResource PresetButton}" Margin="2,0,2,0"/>
+                                    <Button x:Name="BtnTCCustom" Content="Custom" Click="BtnTCPreset_Click" Tag="Custom"
+                                            Style="{StaticResource PresetButton}" Margin="4,0,0,0"/>
+                                </UniformGrid>
+
+                                <StackPanel x:Name="CustomTCPanel" Visibility="Collapsed" Margin="0,0,0,16">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="12"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Minutes" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                            <TextBox x:Name="TxtTCMinutes" Style="{StaticResource RoundedTextBox}"
+                                                     LostFocus="TxtTCMinutes_LostFocus"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Increment (sec)" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                            <TextBox x:Name="TxtTCIncrement" Style="{StaticResource RoundedTextBox}"
+                                                     LostFocus="TxtTCIncrement_LostFocus"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <TextBlock Text="Challenge time control. Rapid will only be accepted if 'Accept Rapid' is also enabled."
+                                           FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Opacity="0.7"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+<TabItem Header="Book">
+                        <Grid x:Name="BookTabGrid" AllowDrop="True"
+                              DragOver="BookTab_DragOver" Drop="BookTab_Drop">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="8,16,8,16">
+                                    <Grid Margin="0,0,0,16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="O P E N I N G   B O O K" FontSize="10" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentBrush}" Opacity="0.65" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="BtnResetBook" Text="Reset to defaults"
+                                                   FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Cursor="Hand" VerticalAlignment="Center"
+                                                   MouseLeftButtonDown="BtnResetBook_Click"/>
+                                    </Grid>
+                                    <Rectangle Height="1" Margin="0,0,0,20">
+                                        <Rectangle.Fill>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Color="#33d4985a" Offset="0"/>
+                                                <GradientStop Color="#00d4985a" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Rectangle.Fill>
+                                    </Rectangle>
+
+                                    <DockPanel Margin="0,0,0,14">
+                                        <TextBlock Text="Use Opening Book" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                        <CheckBox x:Name="ChkBookEnabled" IsChecked="True" HorizontalAlignment="Right"
+                                                  Style="{StaticResource ToggleSwitch}"/>
+                                    </DockPanel>
+
+                                    <TextBlock Text="Book Path (.bin file)" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                    <DockPanel Margin="0,0,0,10">
+                                        <Button Content="..." DockPanel.Dock="Right" Width="34" Margin="6,0,0,0"
+                                                Style="{StaticResource PresetButton}" Click="BtnBrowseBookPath_Click"/>
+                                        <TextBox x:Name="TxtBookPath2" Style="{StaticResource RoundedTextBox}"
+                                                 x:FieldModifier="private"/>
+                                    </DockPanel>
+
+                                    <TextBlock Text="Drop a .bin file anywhere in this tab"
+                                               FontStyle="Italic" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Opacity="0.5"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </TabItem>
+<TabItem Header="Chat">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8,16,8,16">
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="C H A T" FontSize="10" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}" Opacity="0.65" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="BtnResetChat" Text="Reset to defaults"
+                                               FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                               Cursor="Hand" VerticalAlignment="Center"
+                                               MouseLeftButtonDown="BtnResetChat_Click"/>
+                                </Grid>
+                                <Rectangle Height="1" Margin="0,0,0,20">
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#33d4985a" Offset="0"/>
+                                            <GradientStop Color="#00d4985a" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+
+                                <DockPanel Margin="0,0,0,16">
+                                    <TextBlock Text="Send Chat Messages" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
+                                    <CheckBox x:Name="ChkSendChat" IsChecked="True" HorizontalAlignment="Right"
+                                              Style="{StaticResource ToggleSwitch}"
+                                              Checked="ChkSendChat_Changed" Unchecked="ChkSendChat_Changed"/>
+                                </DockPanel>
+
+                                <StackPanel x:Name="ChatFieldsPanel">
+                                    <TextBlock Text="Greeting Message" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="TxtGreeting2" Style="{StaticResource RoundedTextBox}"
+                                             MaxLength="140" Margin="0,0,0,4"
+                                             TextChanged="TxtGreeting2_TextChanged"/>
+                                    <TextBlock x:Name="LblGreetingCount" Text="0 / 140" FontSize="10"
+                                               Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Right"
+                                               Margin="0,0,0,16"/>
+
+                                    <TextBlock Text="GG Message" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="TxtGG2" Style="{StaticResource RoundedTextBox}"
+                                             MaxLength="140" Margin="0,0,0,4"
+                                             TextChanged="TxtGG2_TextChanged"/>
+                                    <TextBlock x:Name="LblGGCount" Text="0 / 140" FontSize="10"
+                                               Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Grid>
+<Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="14,10">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#FF120e08" Offset="0"/>
+                    <GradientStop Color="#FF1a1410" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <DockPanel>
+                <Button x:Name="BtnResetGroup" Content="Reset Group" DockPanel.Dock="Left"
+                        Style="{StaticResource PresetButton}" Padding="12,8"
+                        Click="BtnResetGroup_Click"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                    <Button x:Name="BtnRevert" Content="Revert" Style="{StaticResource PresetButton}"
+                            Padding="14,8" Margin="0,0,8,0" Click="BtnRevert_Click"/>
+                    <Button x:Name="BtnSave" Content="Save" Style="{StaticResource AccentButton}"
+                            Padding="18,8" Margin="0,0,8,0" Click="BtnSave_Click">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#FF5a3800" Offset="0"/>
+                                <GradientStop Color="#FF7a5020" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Button.Background>
+                    </Button>
+                    <Button x:Name="BtnApplyClose" Content="Apply &amp; Close" Style="{StaticResource AccentButton}"
+                            Padding="18,8" Click="BtnApplyClose_Click">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#FF3a5520" Offset="0"/>
+                                <GradientStop Color="#FF5a822e" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Button.Background>
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

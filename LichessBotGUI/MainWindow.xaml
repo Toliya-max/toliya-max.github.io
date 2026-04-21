@@ -197,6 +197,12 @@
                                     <CheckBox x:Name="ChkIncludeChess960" IsChecked="False" HorizontalAlignment="Right" Style="{StaticResource ToggleSwitch}"/>
                                 </DockPanel>
 
+                                <DockPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Open games in browser" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"
+                                               ToolTip="When a game starts, open it automatically in your default browser (off by default)"/>
+                                    <CheckBox x:Name="ChkAutoOpenGame" IsChecked="False" HorizontalAlignment="Right" Style="{StaticResource ToggleSwitch}"/>
+                                </DockPanel>
+
                                 <TextBlock Text="Min Opponent Rating" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
                                 <TextBox x:Name="TxtRating" Text="1900" Style="{StaticResource RoundedTextBox}" Margin="0,0,0,10"/>
 

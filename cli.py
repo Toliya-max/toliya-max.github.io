@@ -55,6 +55,7 @@ def main():
     parser.add_argument("--max-concurrent", type=int, default=1, help="Max simultaneous games (default: 1)")
     parser.add_argument("--accept-rapid", action="store_true", help="Accept rapid games up to 15 minutes (default: blitz/bullet only)")
     parser.add_argument("--include-chess960", action="store_true", default=False, help="Include Chess960 challenges in auto-challenger (randomly alternates with standard)")
+    parser.add_argument("--auto-open-game", action="store_true", default=False, help="Open each game in default browser when it starts (off by default)")
     args = parser.parse_args()
 
     _check_license()
@@ -108,7 +109,8 @@ def main():
         gg_message=args.gg_message,
         max_concurrent_games=args.max_concurrent,
         accept_rapid=args.accept_rapid,
-        include_chess960=args.include_chess960
+        include_chess960=args.include_chess960,
+        auto_open_game=args.auto_open_game
     )
 
     try:

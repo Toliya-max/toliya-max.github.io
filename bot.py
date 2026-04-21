@@ -63,7 +63,7 @@ except Exception as e:
     print(f"Warning: Could not start eval server: {e}")
 
 class LichessBot:
-    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!", max_concurrent_games=1, accept_rapid=False, include_chess960=False):
+    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!", max_concurrent_games=1, accept_rapid=False, include_chess960=False, auto_open_game=False):
         if not token:
             raise ValueError("LICHESS_API_TOKEN is not set.")
         
@@ -100,6 +100,7 @@ class LichessBot:
         self.max_concurrent_games = max_concurrent_games
         self.accept_rapid = accept_rapid
         self.include_chess960 = include_chess960
+        self.auto_open_game = auto_open_game
         self._last_eval = {}
         self._move_counter = 0
 
@@ -570,11 +571,14 @@ class LichessBot:
                             self.pending_challenges.clear()
 
                         game_url = f"https://lichess.org/{game_id}"
-                        try:
-                            webbrowser.open(game_url, new=2)
-                            print(f"Opened game in browser: {game_url}")
-                        except Exception as e:
-                            print(f"Failed to open browser: {e}")
+                        if self.auto_open_game:
+                            try:
+                                webbrowser.open(game_url, new=2)
+                                print(f"Opened game in browser: {game_url}")
+                            except Exception as e:
+                                print(f"Failed to open browser: {e}")
+                        else:
+                            print(f"Game URL (auto-open off): {game_url}")
 
                         threading.Thread(target=self.handle_game, args=(game_id,), daemon=True).start()
             except BaseException as e:

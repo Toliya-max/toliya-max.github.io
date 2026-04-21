@@ -70,7 +70,7 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.5.1";
+        private const string CurrentVersion = "1.5.2";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;
@@ -662,6 +662,7 @@ namespace LichessBotGUI
                         SliderSpeed.Value = config.MoveSpeed;
                         SliderDepth.Value = double.TryParse(config.MaxDepth, out double d) ? d : 0;
                         ChkIncludeChess960.IsChecked = config.IncludeChess960;
+                        ChkAutoOpenGame.IsChecked = config.AutoOpenGame;
                     }
                 }
             }
@@ -691,7 +692,8 @@ namespace LichessBotGUI
                     SkillLevel = SliderSkill.Value,
                     MoveSpeed = SliderSpeed.Value,
                     MaxDepth = ((int)SliderDepth.Value).ToString(),
-                    IncludeChess960 = ChkIncludeChess960.IsChecked == true
+                    IncludeChess960 = ChkIncludeChess960.IsChecked == true,
+                    AutoOpenGame = ChkAutoOpenGame.IsChecked == true
                 };
                 
                 string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
@@ -836,6 +838,9 @@ namespace LichessBotGUI
 
             if (ChkIncludeChess960.IsChecked == true)
                 parts.Add("--include-chess960");
+
+            if (ChkAutoOpenGame.IsChecked == true)
+                parts.Add("--auto-open-game");
 
             return string.Join(" ", parts);
         }
@@ -1357,6 +1362,7 @@ namespace LichessBotGUI
         public string GGMessage { get; set; } = "gg wp!";
         public bool AcceptRematch { get; set; } = true;
         public bool IncludeChess960 { get; set; } = false;
+        public bool AutoOpenGame { get; set; } = false;
     }
 
     public class LichessPlayingResponse
