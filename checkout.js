@@ -1,5 +1,19 @@
 (() => {
-  const API = window.CHECKOUT_API || "";
+  let API = window.CHECKOUT_API || "";
+  let apiResolved = !!API;
+
+  async function ensureApi() {
+    if (apiResolved) return API;
+    try {
+      const r = await fetch("latest.json", { cache: "no-store" });
+      const j = await r.json();
+      API = (j.api || "").replace(/\/+$/, "");
+      window.CHECKOUT_API = API;
+    } catch {}
+    apiResolved = true;
+    return API;
+  }
+
   const modal = document.getElementById("checkoutModal");
   if (!modal) return;
 
@@ -55,6 +69,7 @@
     btn.disabled = true;
     btn.textContent = "Working…";
 
+    await ensureApi();
     if (!API) {
       showError("Checkout API is not configured yet. Please use the Telegram bot.");
       return;
