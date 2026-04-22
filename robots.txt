@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /downloads/
+Allow: /legal/
+
+Sitemap: /sitemap.xml

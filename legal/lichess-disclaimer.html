@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lichess Disclaimer — Lichess Bot Controller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<main class="legal">
+  <a class="legal__back" href="../index.html">← Back to home</a>
+  <h1>Lichess Disclaimer</h1>
+  <p class="legal__meta">Read before you buy.</p>
+
+  <div class="legal__callout">
+    <p><strong>⚠ This software is ONLY for Lichess BOT accounts.</strong></p>
+    <p>Lichess Bot Controller is a tool for players who want to operate a registered Lichess BOT account with strong, automatic gameplay.</p>
+  </div>
+
+  <p>It is <strong>NOT</strong>:</p>
+  <ul>
+    <li>An unfair advantage for your regular Lichess account.</li>
+    <li>A way to boost your human rating.</li>
+    <li>Affiliated with, endorsed by, or developed by lichess.org.</li>
+  </ul>
+
+  <h2>The short version</h2>
+  <p>Lichess officially supports bot accounts. They have a dedicated API (<code>/api/bot/*</code>) and BOT-prefix titles for them. Running a bot on a BOT account is <strong>100% legal and encouraged</strong> by Lichess.</p>
+  <p>Running a bot on a <strong>human</strong> account is cheating. It will get you banned — permanently. We take no responsibility for that.</p>
+
+  <h2>What you must do before buying</h2>
+  <ol>
+    <li>Register a new Lichess account (or have an existing account with <strong>zero rated games</strong>).</li>
+    <li>Upgrade it to a BOT account using Lichess's official API endpoint: <code>POST https://lichess.org/api/bot/account/upgrade</code>.<br>
+      <strong>This action is irreversible.</strong> You cannot convert a BOT account back into a regular account.</li>
+    <li>Generate an API token at <a href="https://lichess.org/account/oauth/token" target="_blank" rel="noopener">lichess.org/account/oauth/token</a> with the <strong>"Bot: Play games"</strong> scope.</li>
+    <li>Use that token in Lichess Bot Controller.</li>
+  </ol>
+  <p>If you don't have a BOT account, <strong>do not buy this software</strong>. It will refuse to operate against human opponents on a human account anyway, and Lichess will ban the account on the first game.</p>
+
+  <h2>What happens if I use it on a human account?</h2>
+  <ol>
+    <li>Lichess anti-cheat will detect it quickly (usually within 5–50 games).</li>
+    <li>Your Lichess account will be permanently closed. No appeal.</li>
+    <li>We will not refund you.</li>
+    <li>You agreed to this when you bought the software.</li>
+  </ol>
+
+  <h2>What Lichess thinks of bots</h2>
+  <p>Lichess fully supports bots as a feature. You can play against 150+ registered bots right now. They participate in dedicated bot tournaments. Some have 3200+ Elo ratings. Nobody gets banned for this.</p>
+  <p>You can be one of them.</p>
+
+  <h2>Trademark</h2>
+  <p>"Lichess" is a trademark of its respective owners. We use the name only to describe interoperability and compliance with their public API. We are not affiliated with lichess.org.</p>
+</main>
+</body>
+</html>
