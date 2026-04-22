@@ -98,29 +98,56 @@ document.querySelectorAll("[data-strip]").forEach(renderStrip);
 
 (function initMagnetic() {
   var prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (prefersReduced) return;
+  if (prefersReduced || matchMedia("(hover: none)").matches) return;
 
   document.querySelectorAll(".btn-magnetic").forEach(function(btn) {
-    btn.addEventListener("mousemove", function(e) {
+    var rafId = 0, lastX = 0, lastY = 0;
+    var onMove = function(e) {
       var rect = btn.getBoundingClientRect();
-      var x = e.clientX - rect.left - rect.width / 2;
-      var y = e.clientY - rect.top - rect.height / 2;
-      btn.style.transform = "translate(" + (x * 0.15) + "px, " + (y * 0.15) + "px)";
-    });
+      lastX = e.clientX - rect.left - rect.width / 2;
+      lastY = e.clientY - rect.top - rect.height / 2;
+      if (rafId) return;
+      rafId = requestAnimationFrame(function() {
+        btn.style.transform = "translate(" + (lastX * 0.15) + "px, " + (lastY * 0.15) + "px)";
+        rafId = 0;
+      });
+    };
+    btn.addEventListener("mousemove", onMove, { passive: true });
     btn.addEventListener("mouseleave", function() {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
       btn.style.transform = "";
     });
   });
 }());
 
 (function initSpotlight() {
+  if (matchMedia("(hover: none)").matches) return;
+
   document.querySelectorAll(".move-card").forEach(function(card) {
-    card.addEventListener("mousemove", function(e) {
+    var rafId = 0, lastX = 0, lastY = 0;
+    var onMove = function(e) {
       var rect = card.getBoundingClientRect();
-      card.style.setProperty("--mouse-x", (e.clientX - rect.left) + "px");
-      card.style.setProperty("--mouse-y", (e.clientY - rect.top) + "px");
-    });
+      lastX = e.clientX - rect.left;
+      lastY = e.clientY - rect.top;
+      if (rafId) return;
+      rafId = requestAnimationFrame(function() {
+        card.style.setProperty("--mouse-x", lastX + "px");
+        card.style.setProperty("--mouse-y", lastY + "px");
+        rafId = 0;
+      });
+    };
+    card.addEventListener("mousemove", onMove, { passive: true });
   });
+}());
+
+(function pauseHoverDuringScroll() {
+  var html = document.documentElement;
+  var t = 0;
+  window.addEventListener("scroll", function() {
+    html.classList.add("is-scrolling");
+    clearTimeout(t);
+    t = setTimeout(function() { html.classList.remove("is-scrolling"); }, 140);
+  }, { passive: true });
 }());
 
 (function initScrollReveal() {

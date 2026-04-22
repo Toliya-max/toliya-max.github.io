@@ -165,7 +165,8 @@ code, .mono {
   z-index: 20;
   background: linear-gradient(to right, #120e08 0%, #1a1410 50%, #0e0b07 100%);
   border-bottom: 1px solid var(--rule);
-  backdrop-filter: blur(8px);
+  will-change: transform;
+  contain: layout paint;
 }
 .topbar-inner {
   max-width: 1180px;
@@ -504,6 +505,10 @@ h2 .sh { font-size: 0.62em; }
   transition: border-color 220ms, background 220ms, transform 280ms cubic-bezier(0.16,1,0.3,1), box-shadow 280ms;
   animation: bento-in 480ms cubic-bezier(0.16,1,0.3,1) both;
   animation-delay: calc(var(--card-i, 0) * 60ms);
+  contain: layout paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 340px;
+  will-change: transform;
 }
 @keyframes bento-in {
   from { opacity: 0; transform: translateY(20px); }
@@ -517,18 +522,22 @@ h2 .sh { font-size: 0.62em; }
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(212,152,90,0.13), transparent 40%);
+  background: radial-gradient(500px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(212,152,90,0.13), transparent 40%);
   opacity: 0;
   transition: opacity 0.35s;
   pointer-events: none;
 }
-.move-card:hover::before { opacity: 1; }
-.move-card:hover {
-  border-color: rgba(212,152,90,0.28);
-  background: linear-gradient(180deg, rgba(50,40,31,0.55) 0%, rgba(36,28,21,0.55) 100%);
-  transform: translateY(-3px);
-  box-shadow: 0 12px 40px -14px rgba(212,152,90,0.22), 0 4px 16px -8px rgba(0,0,0,0.4);
+@media (hover: hover) {
+  .move-card:hover::before { opacity: 1; }
+  .move-card:hover {
+    border-color: rgba(212,152,90,0.28);
+    background: linear-gradient(180deg, rgba(50,40,31,0.55) 0%, rgba(36,28,21,0.55) 100%);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px -14px rgba(212,152,90,0.22), 0 4px 16px -8px rgba(0,0,0,0.4);
+  }
 }
+html.is-scrolling .move-card::before { opacity: 0 !important; transition: none !important; }
+html.is-scrolling .move-card { transition: none !important; }
 
 .bento-wide.move-card {
   flex-direction: row;
@@ -583,16 +592,34 @@ h2 .sh { font-size: 0.62em; }
 }
 .move-body h3 {
   font-family: var(--ff-display);
-  font-size: 1.28rem;
+  font-size: 1.32rem;
   font-weight: 600;
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.7rem;
   letter-spacing: -0.005em;
+  color: var(--text-1, #f4ead6);
 }
 .move-body p {
   margin: 0;
-  color: var(--text-2);
-  font-size: 0.96rem;
-  line-height: 1.65;
+  color: var(--text-1, #f0e6d2);
+  font-size: 1rem;
+  line-height: 1.6;
+  padding: 0.85rem 1rem;
+  background: linear-gradient(180deg, rgba(18,13,8,0.7) 0%, rgba(12,8,5,0.55) 100%);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  box-shadow: inset 0 0 0 1px rgba(212,152,90,0.08);
+}
+.move-body p code {
+  background: rgba(212,152,90,0.14);
+  color: var(--accent-hi, #e9b878);
+  padding: 0.08em 0.4em;
+  border-radius: 3px;
+  font-family: var(--ff-mono);
+  font-size: 0.9em;
+}
+.bento-featured .move-body p {
+  background: linear-gradient(180deg, rgba(28,18,10,0.75) 0%, rgba(18,12,7,0.6) 100%);
+  border-left-color: var(--accent-hi, #e9b878);
 }
 
 .crosstable {
