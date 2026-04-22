@@ -1155,6 +1155,23 @@ footer {
   border-color: var(--accent);
   background: #13090b;
 }
+.checkout-field input.is-invalid {
+  border-color: #e74c3c;
+  background: #1a0c0c;
+}
+.checkout-field input.is-invalid:focus { border-color: #e74c3c; }
+.checkout-field .req {
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 0.78rem;
+  margin-left: 0.2rem;
+}
+.checkout-err {
+  color: #e74c3c;
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
+  font-weight: 500;
+}
 
 .checkout-cta { width: 100%; justify-content: center; margin-top: 0.5rem; }
 .checkout-foot {

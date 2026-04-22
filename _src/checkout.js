@@ -62,10 +62,45 @@
     btn.addEventListener("click", () => openModal(btn.dataset.tier))
   );
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  function showEmailErr(msg) {
+    const el = document.getElementById("coEmailErr");
+    const input = document.getElementById("coEmail");
+    if (el) {
+      el.textContent = msg;
+      el.hidden = false;
+    }
+    if (input) {
+      input.classList.add("is-invalid");
+      input.focus();
+    }
+  }
+
+  function clearEmailErr() {
+    const el = document.getElementById("coEmailErr");
+    const input = document.getElementById("coEmail");
+    if (el) el.hidden = true;
+    if (input) input.classList.remove("is-invalid");
+  }
+
+  document.getElementById("coEmail")?.addEventListener("input", clearEmailErr);
+
   async function startCheckout() {
     const tier = document.getElementById("coTier").value;
     const email = document.getElementById("coEmail").value.trim();
     const btn = document.getElementById("coStart");
+
+    if (!email) {
+      showEmailErr("Email is required — we send your key there.");
+      return;
+    }
+    if (!EMAIL_RE.test(email) || email.length > 200) {
+      showEmailErr("Please enter a valid email address.");
+      return;
+    }
+    clearEmailErr();
+
     btn.disabled = true;
     btn.textContent = "Working…";
 

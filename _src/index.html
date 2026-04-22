@@ -521,14 +521,15 @@
         </select>
       </div>
       <div class="checkout-field">
-        <label for="coEmail">Email (optional, for backup)</label>
-        <input id="coEmail" type="email" placeholder="you@example.com" autocomplete="email">
+        <label for="coEmail">Email <span class="req">(required — your key is sent here)</span></label>
+        <input id="coEmail" type="email" placeholder="you@example.com" autocomplete="email" required inputmode="email">
+        <div class="checkout-err" id="coEmailErr" hidden>Please enter a valid email address.</div>
       </div>
       <button class="btn-primary checkout-cta" id="coStart">
         Get payment code
         <span class="arrow">→</span>
       </button>
-      <p class="checkout-foot">You pay on DonationAlerts, we issue the key automatically. No account required.</p>
+      <p class="checkout-foot">You pay on DonationAlerts, we issue the key automatically. The key is also emailed to you.</p>
     </div>
 
     <div class="checkout-step" data-step="pay" hidden>
