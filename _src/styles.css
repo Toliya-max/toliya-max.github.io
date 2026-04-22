@@ -165,8 +165,6 @@ code, .mono {
   z-index: 20;
   background: linear-gradient(to right, #120e08 0%, #1a1410 50%, #0e0b07 100%);
   border-bottom: 1px solid var(--rule);
-  will-change: transform;
-  contain: layout paint;
 }
 .topbar-inner {
   max-width: 1180px;
@@ -502,20 +500,7 @@ h2 .sh { font-size: 0.62em; }
   border-radius: 10px;
   position: relative;
   overflow: hidden;
-  transition: border-color 220ms, background 220ms, transform 280ms cubic-bezier(0.16,1,0.3,1), box-shadow 280ms;
-  animation: bento-in 480ms cubic-bezier(0.16,1,0.3,1) both;
-  animation-delay: calc(var(--card-i, 0) * 60ms);
-  contain: layout paint;
-  content-visibility: auto;
-  contain-intrinsic-size: 1px 340px;
-  will-change: transform;
-}
-@keyframes bento-in {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .move-card { animation: none; }
+  transition: border-color 220ms, background 220ms;
 }
 .move-card::before {
   content: '';
@@ -532,15 +517,10 @@ h2 .sh { font-size: 0.62em; }
   .move-card:hover {
     border-color: rgba(212,152,90,0.28);
     background: linear-gradient(180deg, rgba(50,40,31,0.55) 0%, rgba(36,28,21,0.55) 100%);
-    transform: translateY(-3px);
-    box-shadow: 0 12px 40px -14px rgba(212,152,90,0.22), 0 4px 16px -8px rgba(0,0,0,0.4);
   }
 }
 html.is-scrolling .move-card::before { opacity: 0 !important; transition: none !important; }
 html.is-scrolling .move-card { transition: none !important; }
-html.is-scrolling .marquee-track,
-html.is-scrolling .endgame-king,
-html.is-scrolling .buy-btn--hi { animation-play-state: paused !important; }
 
 .bento-wide.move-card {
   flex-direction: row;
@@ -852,13 +832,7 @@ html.is-scrolling .buy-btn--hi { animation-play-state: paused !important; }
   color: var(--accent);
   margin-bottom: 1rem;
   filter: drop-shadow(0 10px 30px rgba(212,152,90,0.35));
-  animation: pulse 6s ease-in-out infinite;
 }
-@keyframes pulse {
-  0%, 100% { transform: translateY(0); filter: drop-shadow(0 10px 30px rgba(212,152,90,0.35)); }
-  50%      { transform: translateY(-6px); filter: drop-shadow(0 18px 40px rgba(212,152,90,0.5)); }
-}
-@media (prefers-reduced-motion: reduce) { .endgame-king { animation: none; } }
 .endgame h2 { font-size: clamp(2rem, 1rem + 3vw, 3.2rem); margin: 1rem 0 2.5rem; }
 
 footer {
@@ -922,7 +896,6 @@ footer {
 
 .btn-magnetic {
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 160ms, box-shadow 200ms !important;
-  will-change: transform;
 }
 
 .marquee-wrap {
@@ -937,14 +910,7 @@ footer {
   display: flex;
   gap: 2rem;
   width: max-content;
-  animation: marquee-scroll 40s linear infinite;
-}
-@keyframes marquee-scroll {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .marquee-track { animation: none; }
+  overflow: hidden;
 }
 .marquee-track span {
   font-family: var(--ff-mono);
@@ -1055,25 +1021,6 @@ footer {
   box-shadow: 0 8px 28px -6px rgba(212, 152, 90, 0.75),
               0 0 0 1px rgba(212, 152, 90, 0.35),
               inset 0 1px 0 rgba(255, 255, 255, 0.24);
-  animation: buy-pulse 2.4s ease-in-out infinite;
-}
-.buy-btn--hi:hover {
-  animation: none;
-}
-@keyframes buy-pulse {
-  0%, 100% {
-    box-shadow: 0 8px 28px -6px rgba(212, 152, 90, 0.75),
-                0 0 0 1px rgba(212, 152, 90, 0.35),
-                inset 0 1px 0 rgba(255, 255, 255, 0.24);
-  }
-  50% {
-    box-shadow: 0 10px 32px -4px rgba(212, 152, 90, 0.95),
-                0 0 0 4px rgba(212, 152, 90, 0.18),
-                inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .buy-btn--hi { animation: none; }
 }
 
 .checkout-rub {
