@@ -150,3 +150,53 @@ document.querySelectorAll("[data-strip]").forEach(renderStrip);
   }, { passive: true });
 }());
 
+(function initAnimOnVisible() {
+  if (!("IntersectionObserver" in window)) {
+    document.querySelectorAll(".move-card, .marquee-track, .endgame-king, .buy-btn--hi").forEach(function(el) { el.classList.add("in"); });
+    return;
+  }
+  var prefersReduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var loopTargets = document.querySelectorAll(".marquee-track, .endgame-king, .buy-btn--hi");
+  var loopIo = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) e.target.classList.add("in");
+      else e.target.classList.remove("in");
+    });
+  }, { rootMargin: "100px 0px" });
+  loopTargets.forEach(function(el) { loopIo.observe(el); });
+
+  var onceTargets = document.querySelectorAll(".move-card");
+  var onceIo = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      onceIo.unobserve(e.target);
+    });
+  }, { threshold: 0.1, rootMargin: "0px 0px -40px 0px" });
+  if (prefersReduced) {
+    onceTargets.forEach(function(el) { el.classList.add("in"); });
+  } else {
+    onceTargets.forEach(function(el) { onceIo.observe(el); });
+  }
+}());
+
+(function initScrollReveal() {
+  if (!("IntersectionObserver" in window)) return;
+  var prefersReduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReduced) return;
+
+  var targets = document.querySelectorAll(".shot, .verdict, .section-head, .about .two-col > div, .endgame-inner > *, .faq-row");
+  targets.forEach(function(el) { el.classList.add("fx-hidden"); });
+
+  var io = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.remove("fx-hidden");
+      e.target.classList.add("fx-visible");
+      io.unobserve(e.target);
+    });
+  }, { threshold: 0.08, rootMargin: "0px 0px -40px 0px" });
+  targets.forEach(function(el) { io.observe(el); });
+}());
+
