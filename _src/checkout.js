@@ -122,14 +122,15 @@
       const data = await r.json();
       currentSession = data.sessionId;
 
-      const price = "$" + data.amount;
+      const amountStr = Number(data.amount).toFixed(2);
+      const price = "$" + amountStr;
       const setText = (id, val) => {
         const el = document.getElementById(id);
         if (el) el.textContent = val;
       };
       setText("coCode", data.code);
       setText("coCodeSmall", data.code);
-      setText("coAmount", String(data.amount));
+      setText("coAmount", amountStr);
       setText("coAmountUsd", price);
       setText("coAmountInline", price);
       setText("coTierLabel", data.label);
@@ -156,10 +157,10 @@
       try {
         const r = await fetch(`${API}/api/status?session=${sessionId}`);
         const data = await r.json();
-        if (data.status === "paid" && data.key) {
+        if (data.status === "paid" && (data.key || (data.keys && data.keys.length))) {
           clearInterval(pollTimer);
           pollTimer = null;
-          document.getElementById("coKey").textContent = data.key;
+          renderKeys(data);
           showStep("done");
         } else if (data.status === "expired" || r.status === 404) {
           clearInterval(pollTimer);
@@ -184,10 +185,56 @@
     showStep("error");
   }
 
+  function renderKeys(data) {
+    const keys = (data.keys && data.keys.length ? data.keys : [data.key]).filter(Boolean);
+    const tierLabels = data.tierLabels || [];
+    const title = document.getElementById("coDoneTitle");
+    if (title) {
+      title.textContent = keys.length === 1
+        ? "Your license key"
+        : `Your ${keys.length} license keys`;
+    }
+    const legacy = document.getElementById("coKey");
+    if (legacy) legacy.textContent = keys[0] || "";
+    const list = document.getElementById("coKeysList");
+    if (list) {
+      list.innerHTML = "";
+      keys.forEach((k, i) => {
+        const row = document.createElement("div");
+        row.className = "checkout-key-row";
+        const kEl = document.createElement("div");
+        kEl.className = "checkout-key";
+        kEl.textContent = k;
+        row.appendChild(kEl);
+        if (tierLabels[i]) {
+          const tag = document.createElement("div");
+          tag.className = "checkout-key-tag";
+          tag.textContent = tierLabels[i];
+          row.appendChild(tag);
+        }
+        const btn = document.createElement("button");
+        btn.className = "btn-ghost checkout-copy";
+        btn.type = "button";
+        btn.textContent = "Copy";
+        btn.addEventListener("click", () => {
+          navigator.clipboard?.writeText(k).then(() => {
+            const old = btn.textContent;
+            btn.textContent = "Copied!";
+            setTimeout(() => (btn.textContent = old), 1200);
+          });
+        });
+        row.appendChild(btn);
+        list.appendChild(row);
+      });
+    }
+  }
+
   document.getElementById("coStart").addEventListener("click", startCheckout);
 
-  document.getElementById("coCopy").addEventListener("click", () => {
-    const key = document.getElementById("coKey").textContent;
+  document.getElementById("coCopy")?.addEventListener("click", () => {
+    const el = document.querySelector("#coKeysList .checkout-key") || document.getElementById("coKey");
+    const key = el ? el.textContent : "";
+    if (!key) return;
     navigator.clipboard?.writeText(key).then(
       () => {
         const btn = document.getElementById("coCopy");

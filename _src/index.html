@@ -578,7 +578,7 @@
       <p class="checkout-amount"><strong id="coAmountUsd"></strong> · <span id="coTierLabel"></span></p>
       <ol class="checkout-steps">
         <li>Click <strong>Open DonationAlerts</strong> — amount and reference are pre-filled</li>
-        <li>Confirm and pay <strong id="coAmountInline"></strong></li>
+        <li>Confirm and pay <strong id="coAmountInline"></strong> <em>(don't change the amount)</em></li>
         <li>Come back here — the key appears automatically</li>
       </ol>
       <a class="btn-primary" id="coOpenDA" target="_blank" rel="noopener">
@@ -586,18 +586,22 @@
         <span class="arrow">→</span>
       </a>
       <p class="checkout-foot checkout-ref">Reference: <span class="mono" id="coCodeSmall"></span> (auto-included)</p>
+      <p class="checkout-foot checkout-warn">
+        ⚠ Pay the exact amount shown. If you pay more, the system automatically splits the payment into multiple keys (one plan per chunk). If you pay less than $1, no key is issued.
+      </p>
       <span id="coCode" hidden></span>
       <div class="checkout-poll" id="coPoll">Waiting for payment…</div>
     </div>
 
     <div class="checkout-step" data-step="done" hidden>
       <div class="label">✓ paid</div>
-      <h3>Your license key</h3>
-      <div class="checkout-key" id="coKey"></div>
+      <h3 id="coDoneTitle">Your license key</h3>
+      <div class="checkout-keys" id="coKeysList"></div>
+      <div class="checkout-key" id="coKey" hidden></div>
       <button class="btn-ghost checkout-copy" id="coCopy">Copy key</button>
       <p class="checkout-foot">
-        Download <a href="/downloads/LichessBotSetup.exe">the installer</a>, run it, paste this key when prompted.
-        <br>If you gave an email, save the key — we don't store it forever.
+        Download <a href="/downloads/LichessBotSetup.exe">the installer</a>, run it, paste a key when prompted.
+        <br>Also sent to your email. Save it — we don't store it forever.
       </p>
     </div>
 
