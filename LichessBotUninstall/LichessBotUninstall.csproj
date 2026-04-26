@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -6,10 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <AssemblyTitle>Lichess Bot Setup</AssemblyTitle>
+    <AssemblyTitle>Lichess Bot Uninstaller</AssemblyTitle>
+    <AssemblyName>LichessBotUninstall</AssemblyName>
+    <RootNamespace>LichessBotUninstall</RootNamespace>
     <Product>Lichess Bot</Product>
     <Company>Toliya-max</Company>
-    <Description>Lichess Bot Installer</Description>
+    <Description>Uninstaller for Lichess Bot</Description>
     <Version>1.5.4</Version>
     <AssemblyVersion>1.5.4.0</AssemblyVersion>
     <FileVersion>1.5.4.0</FileVersion>
@@ -24,9 +26,5 @@
     <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
   </PropertyGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Payload.zip" />
-  </ItemGroup>
 
 </Project>

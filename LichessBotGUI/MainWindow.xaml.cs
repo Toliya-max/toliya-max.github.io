@@ -70,7 +70,7 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.5.3";
+        private const string CurrentVersion = "1.5.4";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;

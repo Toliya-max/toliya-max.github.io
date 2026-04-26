@@ -14,6 +14,9 @@ package/
 
 # Secrets / Settings
 .env
+lichess.env
+*.env.local
+*.env.production
 settings.json
 keygen.py
 license.dat
@@ -34,6 +37,9 @@ LichessBotSetup/bin/
 LichessBotSetup/obj/
 LichessBotSetup/.vs/
 LichessBotSetup/Payload.zip
+LichessBotUninstall/bin/
+LichessBotUninstall/obj/
+LichessBotUninstall/.vs/
 
 # Build outputs
 dist/
@@ -45,6 +51,7 @@ publish/
 publish_gui/
 publish_setup/
 publish_gui_tmp/
+publish_uninstall/
 .claude/
 stats.json
 raw/
@@ -58,3 +65,4 @@ da_tokens.json
 gh_token.txt
 tg_bot.session
 telegram_bot.log
+site/.netlify-config

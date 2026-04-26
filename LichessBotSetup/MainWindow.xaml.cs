@@ -1245,19 +1245,24 @@ namespace LichessBotSetup
         {
             try
             {
-                string exePath = Path.Combine(_installDir, "LichessBotGUI", "LichessBotGUI.exe");
-                string setupPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+                string guiExe = Path.Combine(_installDir, "LichessBotGUI", "LichessBotGUI.exe");
+                string uninstallExe = Path.Combine(_installDir, "LichessBotUninstall.exe");
+                string setupExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+                string uninstallTarget = File.Exists(uninstallExe) ? uninstallExe : setupExe;
+                string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+
                 long sizeKB = 0;
                 try { sizeKB = new System.IO.DirectoryInfo(_installDir).GetFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) / 1024; } catch { }
 
                 using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(
                     @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\LichessBot");
                 key.SetValue("DisplayName", "Lichess Bot");
-                key.SetValue("DisplayVersion", "1.0.0");
+                key.SetValue("DisplayVersion", version);
                 key.SetValue("Publisher", "Toliya-max");
                 key.SetValue("InstallLocation", _installDir);
-                key.SetValue("DisplayIcon", $"\"{exePath}\"");
-                key.SetValue("UninstallString", $"\"{setupPath}\" /uninstall");
+                key.SetValue("DisplayIcon", $"\"{guiExe}\"");
+                key.SetValue("UninstallString", $"\"{uninstallTarget}\"");
+                key.SetValue("QuietUninstallString", $"\"{uninstallTarget}\" /silent");
                 key.SetValue("NoModify", 1, Microsoft.Win32.RegistryValueKind.DWord);
                 key.SetValue("NoRepair", 1, Microsoft.Win32.RegistryValueKind.DWord);
                 key.SetValue("EstimatedSize", (int)Math.Min(sizeKB, int.MaxValue), Microsoft.Win32.RegistryValueKind.DWord);
@@ -1396,6 +1401,27 @@ $Shortcut.Save()
 
         private async void BtnUninstall_Click(object sender, RoutedEventArgs e)
         {
+            string uninstallExe = Path.Combine(_installDir, "LichessBotUninstall.exe");
+            if (File.Exists(uninstallExe))
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = uninstallExe,
+                        UseShellExecute = true,
+                    });
+                    Application.Current.Shutdown();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this,
+                        $"Could not start the uninstaller:\n{ex.Message}\n\nFalling back to built-in cleanup.",
+                        "Uninstaller", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+
             var result = MessageBox.Show(this,
                 $"This will permanently delete all Lichess Bot files from:\n\n{_installDir}\n\nAnd the Desktop shortcut.\n\nAre you sure?",
                 "Confirm Uninstall", MessageBoxButton.YesNo, MessageBoxImage.Warning);

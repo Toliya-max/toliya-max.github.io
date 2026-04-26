@@ -15,6 +15,24 @@ dotnet publish "$root\LichessBotGUI\LichessBotGUI.csproj" `
 if ($LASTEXITCODE -ne 0) { throw "LichessBotGUI publish failed" }
 Write-Host "  GUI published to $guiOut" -ForegroundColor Green
 
+Write-Host "=== Step 1b: Publish LichessBotUninstall (single-file) ===" -ForegroundColor Cyan
+$uninstOut = "$root\publish_uninstall"
+if (Test-Path $uninstOut) { Remove-Item $uninstOut -Recurse -Force }
+
+dotnet publish "$root\LichessBotUninstall\LichessBotUninstall.csproj" `
+    -c Release `
+    -r win-x64 `
+    --self-contained false `
+    -p:PublishSingleFile=true `
+    -p:DebugType=None `
+    -o $uninstOut
+
+if ($LASTEXITCODE -ne 0) { throw "LichessBotUninstall publish failed" }
+if (-not (Test-Path "$uninstOut\LichessBotUninstall.exe")) {
+    throw "LichessBotUninstall.exe not produced"
+}
+Write-Host "  Uninstaller published to $uninstOut" -ForegroundColor Green
+
 Write-Host "=== Step 2: Create Payload.zip ===" -ForegroundColor Cyan
 $zipDest = "$root\LichessBotSetup\Payload.zip"
 
@@ -28,6 +46,9 @@ $tempPayload = "$root\payload_tmp"
 if (Test-Path $tempPayload) { Remove-Item $tempPayload -Recurse -Force }
 New-Item -ItemType Directory -Force -Path "$tempPayload\LichessBotGUI" | Out-Null
 Copy-Item "$guiOut\*" "$tempPayload\LichessBotGUI\" -Recurse
+
+Copy-Item "$uninstOut\LichessBotUninstall.exe" "$tempPayload\LichessBotUninstall.exe"
+Write-Host "  Bundled uninstaller into payload" -ForegroundColor Green
 
 # Include Python bot files at root level
 $pyFiles = @("cli.py", "bot.py", "config.py", "engine.py", "engine_setup.py",
