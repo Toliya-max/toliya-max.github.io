@@ -1,1 +1,152 @@
-(()=>{let e=window.CHECKOUT_API||"",t=!!e;const n=document.getElementById("checkoutModal");if(!n)return;const o={form:n.querySelector('[data-step="form"]'),pay:n.querySelector('[data-step="pay"]'),done:n.querySelector('[data-step="done"]'),error:n.querySelector('[data-step="error"]')};let c=null,a=null;function s(e){Object.entries(o).forEach(([t,n])=>{n&&(n.hidden=t!==e)})}function d(){n.hidden=!0,document.body.style.overflow="",c&&(clearInterval(c),c=null),a=null}n.querySelectorAll("[data-close]").forEach(e=>e.addEventListener("click",d)),document.addEventListener("keydown",e=>{"Escape"!==e.key||n.hidden||d()}),document.querySelectorAll(".buy-btn").forEach(e=>e.addEventListener("click",()=>{return t=e.dataset.tier,n.hidden=!1,document.body.style.overflow="hidden",t&&(document.getElementById("coTier").value=t),void s("form");var t}));const l=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;function i(e){const t=document.getElementById("coEmailErr"),n=document.getElementById("coEmail");t&&(t.textContent=e,t.hidden=!1),n&&(n.classList.add("is-invalid"),n.focus())}function r(){const e=document.getElementById("coEmailErr"),t=document.getElementById("coEmail");e&&(e.hidden=!0),t&&t.classList.remove("is-invalid")}function u(e){document.getElementById("coError").textContent=e,s("error")}document.getElementById("coEmail")?.addEventListener("input",r),document.getElementById("coStart").addEventListener("click",async function(){const n=document.getElementById("coTier").value,o=document.getElementById("coEmail").value.trim(),d=document.getElementById("coStart");if(o)if(!l.test(o)||o.length>200)i("Please enter a valid email address.");else if(r(),d.disabled=!0,d.textContent="Working…",await async function(){if(t)return e;try{const t=await fetch("latest.json",{cache:"no-store"}),n=await t.json();e=(n.api||"").replace(/\/+$/,""),window.CHECKOUT_API=e}catch{}return t=!0,e}(),e)try{const t=await fetch(`${e}/api/checkout`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({tier:n,email:o})});if(!t.ok)throw new Error(`HTTP ${t.status}`);const d=await t.json();a=d.sessionId;const l=Number(d.amount).toFixed(2),i="$"+l,r=(e,t)=>{const n=document.getElementById(e);n&&(n.textContent=t)};r("coCode",d.code),r("coCodeSmall",d.code),r("coAmount",l),r("coAmountUsd",i),r("coAmountInline",i),r("coTierLabel",d.label);const m=document.getElementById("coOpenDA");m&&(m.href=d.payUrl),s("pay"),function(t){c&&clearInterval(c);const n=document.getElementById("coPoll");let o=0;const a=async()=>{o++;try{const a=await fetch(`${e}/api/status?session=${t}`),d=await a.json();if("paid"===d.status&&(d.key||d.keys&&d.keys.length))clearInterval(c),c=null,function(e){const t=(e.keys&&e.keys.length?e.keys:[e.key]).filter(Boolean),n=e.tierLabels||[],o=document.getElementById("coDoneTitle");o&&(o.textContent=1===t.length?"Your license key":`Your ${t.length} license keys`);const c=document.getElementById("coKey");c&&(c.textContent=t[0]||"");const a=document.getElementById("coKeysList");a&&(a.innerHTML="",t.forEach((e,t)=>{const o=document.createElement("div");o.className="checkout-key-row";const c=document.createElement("div");if(c.className="checkout-key",c.textContent=e,o.appendChild(c),n[t]){const e=document.createElement("div");e.className="checkout-key-tag",e.textContent=n[t],o.appendChild(e)}const s=document.createElement("button");s.className="btn-ghost checkout-copy",s.type="button",s.textContent="Copy",s.addEventListener("click",()=>{navigator.clipboard?.writeText(e).then(()=>{const e=s.textContent;s.textContent="Copied!",setTimeout(()=>s.textContent=e,1200)})}),o.appendChild(s),a.appendChild(o)}))}(d),s("done");else if("expired"===d.status||404===a.status)clearInterval(c),c=null,u("This checkout session has expired. Please start over.");else{const e=Math.floor(3*o/60),t=3*o%60;n.textContent=`Waiting for payment… ${e}m ${t}s`}}catch(e){n.textContent=`Connection hiccup — retrying… (${e.message})`}};c=setInterval(a,3e3),a()}(d.sessionId)}catch(e){u(`Couldn't create checkout: ${e.message}`)}finally{d.disabled=!1,d.innerHTML='Get payment code <span class="arrow">→</span>'}else u("Checkout API is not configured yet. Please use the Telegram bot.");else i("Email is required — we send your key there.")}),document.getElementById("coCopy")?.addEventListener("click",()=>{const e=document.querySelector("#coKeysList .checkout-key")||document.getElementById("coKey"),t=e?e.textContent:"";t&&navigator.clipboard?.writeText(t).then(()=>{const e=document.getElementById("coCopy"),t=e.textContent;e.textContent="Copied!",setTimeout(()=>e.textContent=t,1500)},()=>{})})})();
+(() => {
+  const API = window.CHECKOUT_API || "";
+  const modal = document.getElementById("checkoutModal");
+  if (!modal) return;
+
+  const steps = {
+    form: modal.querySelector('[data-step="form"]'),
+    pay: modal.querySelector('[data-step="pay"]'),
+    done: modal.querySelector('[data-step="done"]'),
+    error: modal.querySelector('[data-step="error"]'),
+  };
+
+  let pollTimer = null;
+  let currentSession = null;
+
+  function showStep(name) {
+    Object.entries(steps).forEach(([k, el]) => {
+      if (el) el.hidden = k !== name;
+    });
+  }
+
+  function openModal(tierPreset) {
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+    if (tierPreset) document.getElementById("coTier").value = tierPreset;
+    showStep("form");
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    document.body.style.overflow = "";
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    currentSession = null;
+  }
+
+  modal.querySelectorAll("[data-close]").forEach((el) =>
+    el.addEventListener("click", closeModal)
+  );
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.hidden) closeModal();
+  });
+
+  document.querySelectorAll(".buy-btn").forEach((btn) =>
+    btn.addEventListener("click", () => openModal(btn.dataset.tier))
+  );
+
+  async function startCheckout() {
+    const tier = document.getElementById("coTier").value;
+    const email = document.getElementById("coEmail").value.trim();
+    const btn = document.getElementById("coStart");
+    btn.disabled = true;
+    btn.textContent = "Working…";
+
+    if (!API) {
+      showError("Checkout API is not configured yet. Please use the Telegram bot.");
+      return;
+    }
+
+    try {
+      const r = await fetch(`${API}/api/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, email }),
+      });
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      currentSession = data.sessionId;
+
+      const amountStr = Number(data.amount).toFixed(2);
+      const price = "$" + amountStr;
+      const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+      setText("coCode", data.code);
+      setText("coCodeSmall", data.code);
+      setText("coAmount", amountStr);
+      setText("coAmountUsd", price);
+      setText("coAmountInline", price);
+      setText("coTierLabel", data.label);
+      const daLink = document.getElementById("coOpenDA");
+      if (daLink) daLink.href = data.payUrl;
+
+      showStep("pay");
+      startPolling(data.sessionId);
+    } catch (e) {
+      showError(`Couldn't create checkout: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Get payment code <span class="arrow">→</span>';
+    }
+  }
+
+  function startPolling(sessionId) {
+    if (pollTimer) clearInterval(pollTimer);
+    const pollEl = document.getElementById("coPoll");
+    let ticks = 0;
+
+    const tick = async () => {
+      ticks++;
+      try {
+        const r = await fetch(`${API}/api/status?session=${sessionId}`);
+        const data = await r.json();
+        if (data.status === "paid" && data.key) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          document.getElementById("coKey").textContent = data.key;
+          showStep("done");
+        } else if (data.status === "expired" || r.status === 404) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          showError("This checkout session has expired. Please start over.");
+        } else {
+          const mins = Math.floor((ticks * 3) / 60);
+          const secs = (ticks * 3) % 60;
+          pollEl.textContent = `Waiting for payment… ${mins}m ${secs}s`;
+        }
+      } catch (e) {
+        pollEl.textContent = `Connection hiccup — retrying… (${e.message})`;
+      }
+    };
+
+    pollTimer = setInterval(tick, 3000);
+    tick();
+  }
+
+  function showError(message) {
+    document.getElementById("coError").textContent = message;
+    showStep("error");
+  }
+
+  document.getElementById("coStart").addEventListener("click", startCheckout);
+
+  document.getElementById("coCopy").addEventListener("click", () => {
+    const key = document.getElementById("coKey").textContent;
+    navigator.clipboard?.writeText(key).then(
+      () => {
+        const btn = document.getElementById("coCopy");
+        const old = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => (btn.textContent = old), 1500);
+      },
+      () => {}
+    );
+  });
+})();
