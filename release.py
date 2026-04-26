@@ -268,6 +268,27 @@ def deploy_site(notify_chat=None):
         if notify_chat:
             tg_send(notify_chat, f"⚠️ Site push failed:\n<pre>{err}</pre>")
         return False
+    print(f"Pushed to toliya-max.github.io (v{version})")
+
+    # Cloudflare Pages is NOT git-linked — must call wrangler explicitly.
+    npx = "npx.cmd" if os.name == "nt" else "npx"
+    try:
+        wr = subprocess.run(
+            [npx, "wrangler", "pages", "deploy", ".",
+             "--project-name=chessbot", "--branch=main", "--commit-dirty=true"],
+            cwd=GHPAGES_DIR, capture_output=True, text=True, timeout=300,
+        )
+        if wr.returncode != 0:
+            err = (wr.stderr or wr.stdout or "")[-400:]
+            print(f"wrangler deploy failed: {err}", file=sys.stderr)
+            if notify_chat:
+                tg_send(notify_chat, f"⚠️ Cloudflare Pages deploy failed:\n<pre>{err}</pre>")
+            return False
+    except FileNotFoundError:
+        print("wrangler/npx not found — site pushed to git only, chessbot.pages.dev not refreshed", file=sys.stderr)
+        if notify_chat:
+            tg_send(notify_chat, "⚠️ wrangler not installed — chessbot.pages.dev not refreshed (github.io mirror is updated).")
+        return False
     print(f"Site deployed: chessbot.pages.dev (v{version})")
     return True
 
