@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import subprocess
-import asyncio
 import requests
 from dotenv import load_dotenv
 
@@ -12,7 +11,9 @@ load_dotenv(os.path.join(ROOT, ".env"))
 DATA_FILE = os.path.join(ROOT, "bot_data.json")
 VERSION_FILE = os.path.join(ROOT, "version.txt")
 DIST_FILE = os.path.join(ROOT, "dist", "LichessBotSetup.zip")
+DIST_EXE = os.path.join(ROOT, "dist", "LichessBotSetup.exe")
 BUILD_SCRIPT = os.path.join(ROOT, "build_setup.ps1")
+GHPAGES_DIR = os.environ.get("GHPAGES_DIR", os.path.join(os.path.dirname(ROOT), "lichess-ghpages"))
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 if not BOT_TOKEN:
@@ -22,8 +23,6 @@ if not ADMIN_IDS:
     raise RuntimeError("TELEGRAM_ADMIN_IDS is not set in .env")
 TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 MAX_TG_SIZE = 49 * 1024 * 1024
-
-TG_SESSION = os.path.join(ROOT, "tg_bot.session")
 
 
 def load_data():
@@ -161,42 +160,6 @@ def tg_upload_stream(chat_id, file_path, caption=""):
     return None, None
 
 
-def tg_upload_large(chat_id, file_path, caption=""):
-    from telethon import TelegramClient
-    from telethon.sessions import StringSession
-
-    api_id = 6
-    api_hash = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
-
-    async def _upload():
-        client = TelegramClient(TG_SESSION, api_id, api_hash)
-        await client.start(bot_token=BOT_TOKEN)
-        result = await client.send_file(
-            chat_id, file_path,
-            caption=caption,
-            parse_mode="html",
-            force_document=True)
-        file_id = None
-        if result.document:
-            r = requests.post(f"{TG_API}/getFile",
-                              json={"file_id": str(result.document.id)})
-        await client.disconnect()
-        return result
-
-    loop = asyncio.new_event_loop()
-    msg = loop.run_until_complete(_upload())
-    loop.close()
-
-    bot_msg = requests.post(f"{TG_API}/forwardMessage", json={
-        "chat_id": chat_id, "from_chat_id": chat_id,
-        "message_id": msg.id}).json()
-
-    if bot_msg.get("ok") and bot_msg["result"].get("document"):
-        return bot_msg["result"]["document"]["file_id"]
-
-    return None
-
-
 def build(notify_chat=None):
     result = subprocess.run(
         ["powershell", "-ExecutionPolicy", "Bypass", "-File", BUILD_SCRIPT],
@@ -214,6 +177,98 @@ def build(notify_chat=None):
 
     size_mb = os.path.getsize(DIST_FILE) / (1024 * 1024)
     print(f"Build OK: {DIST_FILE} ({size_mb:.1f} MB)")
+
+    try:
+        import shutil
+        site_dir = os.path.join(ROOT, "site", "downloads")
+        os.makedirs(site_dir, exist_ok=True)
+
+        dist_exe = os.path.join(ROOT, "dist", "LichessBotSetup.exe")
+        site_exe = os.path.join(site_dir, "LichessBotSetup.exe")
+        if os.path.exists(dist_exe):
+            shutil.copy2(dist_exe, site_exe)
+            print(f"Synced installer EXE -> {site_exe}")
+        else:
+            print(f"WARN: {dist_exe} not found — site EXE not updated", file=sys.stderr)
+
+        stale_zip = os.path.join(site_dir, "LichessBotSetup.zip")
+        if os.path.exists(stale_zip):
+            os.remove(stale_zip)
+            print(f"Removed stale site ZIP: {stale_zip}")
+    except Exception as e:
+        print(f"WARN: failed to sync installer to site/: {e}", file=sys.stderr)
+
+    return True
+
+
+def deploy_site(notify_chat=None):
+    """Publish the new installer to chessbot.pages.dev via the gh-pages worktree.
+
+    Cloudflare Pages is wired to the ``Toliya-max/toliya-max.github.io`` repo,
+    so a plain git push to that repo's ``main`` branch triggers a rebuild.
+    The ``GHPAGES_DIR`` worktree is checked out on that branch.
+    """
+    if not os.path.isdir(GHPAGES_DIR):
+        msg = f"gh-pages worktree missing at {GHPAGES_DIR} — skipping site deploy"
+        print(msg, file=sys.stderr)
+        if notify_chat:
+            tg_send(notify_chat, f"⚠️ {msg}")
+        return False
+    if not os.path.exists(DIST_EXE):
+        msg = f"installer EXE missing at {DIST_EXE} — site not updated"
+        print(msg, file=sys.stderr)
+        if notify_chat:
+            tg_send(notify_chat, f"⚠️ {msg}")
+        return False
+
+    version = get_version()
+    site_exe = os.path.join(GHPAGES_DIR, "downloads", "LichessBotSetup.exe")
+    os.makedirs(os.path.dirname(site_exe), exist_ok=True)
+    try:
+        import shutil
+        shutil.copy2(DIST_EXE, site_exe)
+    except Exception as e:
+        print(f"copy to gh-pages failed: {e}", file=sys.stderr)
+        return False
+
+    index_html = os.path.join(GHPAGES_DIR, "index.html")
+    if os.path.exists(index_html):
+        try:
+            import re
+            with open(index_html, "r", encoding="utf-8") as f:
+                html = f.read()
+            new_html = re.sub(r"\b\d+\.\d+\.\d+\b", version, html)
+            if new_html != html:
+                with open(index_html, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(new_html)
+        except Exception as e:
+            print(f"index.html version bump failed: {e}", file=sys.stderr)
+
+    def _gh_git(*args, timeout=60):
+        return subprocess.run(["git", *args], cwd=GHPAGES_DIR,
+                              capture_output=True, text=True, timeout=timeout)
+
+    add = _gh_git("add", "downloads/LichessBotSetup.exe", "index.html")
+    if add.returncode != 0:
+        print(f"git add failed: {add.stderr.strip()}", file=sys.stderr)
+        return False
+    diff = _gh_git("diff", "--cached", "--quiet")
+    if diff.returncode == 0:
+        print("Site already up to date — nothing to push")
+        return True
+
+    commit = _gh_git("commit", "-m", f"downloads: v{version}")
+    if commit.returncode != 0:
+        print(f"git commit failed: {commit.stderr.strip()}", file=sys.stderr)
+        return False
+    push = _gh_git("push", "origin", "HEAD:main", timeout=120)
+    if push.returncode != 0:
+        err = push.stderr.strip()[-400:]
+        print(f"git push failed: {err}", file=sys.stderr)
+        if notify_chat:
+            tg_send(notify_chat, f"⚠️ Site push failed:\n<pre>{err}</pre>")
+        return False
+    print(f"Site deployed: chessbot.pages.dev (v{version})")
     return True
 
 
@@ -341,6 +396,7 @@ def full_release(notify_chat=None):
     create_tag(version)
     if not build(notify_chat):
         return False
+    deploy_site(notify_chat)
     upload(notify_chat)
     notify_users(notify_chat)
     return True

@@ -62,7 +62,7 @@ Amount:   ${amount:.2f} USD
 Order:    WEB_{session_id}
 
 How to activate:
-  1. Download the installer: https://lichess-bot-controller.netlify.app/downloads/LichessBotSetup.exe
+  1. Download the installer: https://chessbot.pages.dev/downloads/LichessBotSetup.exe
   2. Run it, then paste the key when prompted.
 
 Keep this email — the key is the only proof of purchase.
@@ -84,7 +84,7 @@ https://t.me/LichessBotDownoloaderbot
     <tr><td style="padding:4px 16px 4px 0;color:#666">Order</td><td style="padding:4px 0"><code>WEB_{session_id}</code></td></tr>
   </table>
   <ol style="padding-left:20px;margin:16px 0">
-    <li>Download the installer: <a href="https://lichess-bot-controller.netlify.app/downloads/LichessBotSetup.exe">LichessBotSetup.exe</a></li>
+    <li>Download the installer: <a href="https://chessbot.pages.dev/downloads/LichessBotSetup.exe">LichessBotSetup.exe</a></li>
     <li>Run it, then paste the key when prompted.</li>
   </ol>
   <p style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:13px;color:#666">
@@ -123,4 +123,137 @@ https://t.me/LichessBotDownoloaderbot
         return True
     except Exception as e:
         log.exception(f"[EMAIL] send to {to} failed: {e}")
+        return False
+
+
+def send_keys_email(
+    *,
+    to: str,
+    entries: list[dict],
+    paid_amount: float,
+    change: float,
+    session_id: str,
+) -> bool:
+    """Send one or more license keys in a single email.
+
+    ``entries`` is a list of dicts: {key, tier, label, days, amount}.
+    For single-key payments the layout still works. For multi-key payments
+    (user paid more than one tier) all keys appear in one email.
+    """
+    if not to or not entries:
+        return False
+    c = _cfg()
+    if not is_configured():
+        log.warning(f"[EMAIL] SMTP not configured; skipping send to {to}")
+        return False
+
+    n = len(entries)
+    plan_summary = ", ".join(f"{e['label']}" for e in entries)
+    total_days = sum(int(e.get("days", 0)) for e in entries)
+    single = n == 1
+
+    subject = (
+        f"Your Lichess Bot Controller license — {entries[0]['label']}"
+        if single
+        else f"Your {n} Lichess Bot Controller licenses — {plan_summary}"
+    )
+
+    keys_block_text = "\n\n".join(
+        f"    {e['key']}\n    Plan: {e['label']} ({e['days']} days)"
+        for e in entries
+    )
+    change_note_text = (
+        f"\nNote: you paid ${paid_amount:.2f} — ${change:.2f} extra is not refundable via DonationAlerts, "
+        f"so the system used it partially (nearest smaller plan). "
+        f"Contact support for a discount on your next purchase.\n"
+        if change > 0.01
+        else ""
+    )
+
+    body_text = f"""Hi,
+
+Thanks for your purchase. Here {"is your key" if single else f"are your {n} keys"}:
+
+{keys_block_text}
+
+Order total:    ${paid_amount:.2f} USD ({total_days} days total)
+Order ID:       WEB_{session_id}
+{change_note_text}
+How to activate (each key is independent):
+  1. Download the installer: https://chessbot.pages.dev/downloads/LichessBotSetup.exe
+  2. Run it, paste a key when prompted.
+  3. To use a different key later, open the GUI -> Manage License -> Replace.
+
+Keep this email — the keys are the only proof of purchase.
+
+If something went wrong, reply to this email or open the Telegram bot:
+https://t.me/LichessBotDownoloaderbot
+
+— Lichess Bot Controller
+"""
+
+    keys_block_html = "".join(
+        f"""<div style="margin:12px 0;padding:14px 16px;background:#f7f3ea;border:1px solid #e4ddcb;border-radius:8px">
+  <div style="font-family:JetBrains Mono,Consolas,monospace;font-size:17px;word-break:break-all;margin-bottom:6px">{e['key']}</div>
+  <div style="font-size:13px;color:#666"><b>{e['label']}</b> · {e['days']} days · ${e['amount']:.2f}</div>
+</div>"""
+        for e in entries
+    )
+    change_html = (
+        f"""<p style="margin:16px 0;padding:12px 14px;background:#fff8ea;border-left:3px solid #d4985a;border-radius:0 6px 6px 0;font-size:13px;color:#555">
+  <b>Change:</b> you paid <b>${paid_amount:.2f}</b>. The system issued {n} key{'s' if n > 1 else ''} totalling ${paid_amount - change:.2f}, the remaining <b>${change:.2f}</b> was too small for the next plan.
+  Contact <a href="https://t.me/LichessBotDownoloaderbot">support</a> to apply a discount on your next order.
+</p>"""
+        if change > 0.01
+        else ""
+    )
+
+    body_html = f"""<!doctype html>
+<html><body style="font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#111;max-width:640px;margin:0 auto;padding:24px">
+  <h2 style="margin:0 0 8px;color:#0e0b07">Your {"key" if single else f"{n} keys"}</h2>
+  <p style="margin:0 0 12px;color:#555">Thanks for your purchase. Total <b>${paid_amount:.2f} USD</b> for <b>{total_days} days</b>.</p>
+  {keys_block_html}
+  <p style="font-size:13px;color:#666;margin:12px 0"><b>Order</b> <code style="background:#f3efe3;padding:2px 6px;border-radius:3px">WEB_{session_id}</code></p>
+  {change_html}
+  <ol style="padding-left:20px;margin:16px 0;font-size:14px;color:#333">
+    <li>Download the installer: <a href="https://chessbot.pages.dev/downloads/LichessBotSetup.exe">LichessBotSetup.exe</a></li>
+    <li>Run it, paste a key when prompted.</li>
+    <li>To switch keys later: GUI → Manage License → Replace.</li>
+  </ol>
+  <p style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:13px;color:#666">
+    Keep this email — the {"key is" if single else "keys are"} the only proof of purchase.<br>
+    Questions? Reply here or <a href="https://t.me/LichessBotDownoloaderbot">open the Telegram bot</a>.
+  </p>
+</body></html>
+"""
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = c["from_"]
+    msg["To"] = to
+    msg.set_content(body_text)
+    msg.add_alternative(body_html, subtype="html")
+
+    try:
+        port = int(c["port"])
+    except ValueError:
+        log.error(f"[EMAIL] invalid SMTP_PORT={c['port']!r}")
+        return False
+
+    try:
+        if c["tls_mode"] == "starttls":
+            with smtplib.SMTP(c["host"], port, timeout=30) as s:
+                s.ehlo()
+                s.starttls(context=ssl.create_default_context())
+                s.ehlo()
+                s.login(c["user"], c["password"])
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(c["host"], port, context=ssl.create_default_context(), timeout=30) as s:
+                s.login(c["user"], c["password"])
+                s.send_message(msg)
+        log.info(f"[EMAIL] {n} key(s) sent to {to} (session WEB_{session_id})")
+        return True
+    except Exception as e:
+        log.exception(f"[EMAIL] keys send to {to} failed: {e}")
         return False
