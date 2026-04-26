@@ -55,6 +55,7 @@ import os
 from config import LICHESS_API_TOKEN
 from engine import EngineManager
 from eval_server import start_eval_server, update_eval
+import live_config
 
 # Start the evaluation microservice globally
 try:
@@ -104,6 +105,10 @@ class LichessBot:
         self._last_eval = {}
         self._move_counter = 0
 
+        self.engine_manager = EngineManager()
+
+        live_config.subscribe(self._apply_live_config)
+
         stats_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stats.json')
         self._stats_path = stats_path
         if os.path.exists(stats_path):
@@ -134,6 +139,112 @@ class LichessBot:
                     raise
                 print("Retrying login in 2 seconds...")
                 time.sleep(2)
+
+    _LIVE_BOT_KEYS = {
+        "min_rating", "max_games", "skill_level", "max_depth", "speed_multiplier",
+        "rated_challenges", "enable_challenger", "tc_minutes", "tc_increment",
+        "auto_resign", "resign_threshold", "move_overhead", "enable_chat",
+        "greeting", "gg_message", "max_concurrent_games", "accept_rapid",
+        "include_chess960", "auto_open_game", "use_nnue", "threads", "hash_size",
+    }
+
+    def _apply_live_config(self, diff: dict, snap: dict) -> None:
+        """Subscriber: apply settings changes from GUI without restart."""
+        if not diff:
+            return
+        applied: list[str] = []
+
+        if "min_rating" in diff:
+            self.min_rating = int(diff["min_rating"])
+            applied.append(f"min_rating={self.min_rating}")
+        if "max_games" in diff:
+            v = int(diff["max_games"])
+            self.max_games = v if v > 0 else None
+            applied.append(f"max_games={self.max_games}")
+        if "skill_level" in diff:
+            self.skill_level = int(diff["skill_level"])
+            applied.append(f"skill={self.skill_level}")
+        if "max_depth" in diff:
+            v = int(diff["max_depth"])
+            self.max_depth = v if v > 0 else None
+            applied.append(f"depth={self.max_depth}")
+        if "speed_multiplier" in diff:
+            self.speed_multiplier = float(diff["speed_multiplier"])
+            applied.append(f"speed={self.speed_multiplier}")
+        if "rated_challenges" in diff:
+            self.rated_challenges = bool(diff["rated_challenges"])
+            applied.append(f"rated={self.rated_challenges}")
+        if "enable_challenger" in diff:
+            self.enable_challenger = bool(diff["enable_challenger"])
+            applied.append(f"challenger={self.enable_challenger}")
+        if "tc_minutes" in diff:
+            self.tc_minutes = float(diff["tc_minutes"])
+            applied.append(f"tc_min={self.tc_minutes}")
+        if "tc_increment" in diff:
+            self.tc_increment = int(diff["tc_increment"])
+            applied.append(f"tc_inc={self.tc_increment}")
+        if "auto_resign" in diff:
+            self.auto_resign = bool(diff["auto_resign"])
+            applied.append(f"auto_resign={self.auto_resign}")
+        if "resign_threshold" in diff:
+            self.resign_threshold = float(diff["resign_threshold"])
+            applied.append(f"resign_threshold={self.resign_threshold}")
+        if "move_overhead" in diff:
+            self.move_overhead = int(diff["move_overhead"])
+            applied.append(f"move_overhead={self.move_overhead}")
+        if "enable_chat" in diff:
+            self.enable_chat = bool(diff["enable_chat"])
+            applied.append(f"chat={self.enable_chat}")
+        if "greeting" in diff:
+            self.greeting = str(diff["greeting"])
+            applied.append("greeting")
+        if "gg_message" in diff:
+            self.gg_message = str(diff["gg_message"])
+            applied.append("gg_message")
+        if "max_concurrent_games" in diff:
+            self.max_concurrent_games = max(1, int(diff["max_concurrent_games"]))
+            applied.append(f"max_concurrent={self.max_concurrent_games}")
+        if "accept_rapid" in diff:
+            self.accept_rapid = bool(diff["accept_rapid"])
+            applied.append(f"rapid={self.accept_rapid}")
+        if "include_chess960" in diff:
+            self.include_chess960 = bool(diff["include_chess960"])
+            applied.append(f"chess960={self.include_chess960}")
+        if "auto_open_game" in diff:
+            self.auto_open_game = bool(diff["auto_open_game"])
+            applied.append(f"auto_open={self.auto_open_game}")
+
+        engine_diff: dict = {}
+        if "skill_level" in diff:
+            engine_diff["skill_level"] = self.skill_level
+        if "max_depth" in diff:
+            engine_diff["max_depth"] = self.max_depth
+        if "use_nnue" in diff:
+            self.use_nnue = bool(diff["use_nnue"])
+            engine_diff["use_nnue"] = self.use_nnue
+            applied.append(f"nnue={self.use_nnue}")
+        if "threads" in diff:
+            v = int(diff["threads"])
+            self.threads = v if v > 0 else None
+            engine_diff["threads"] = self.threads
+            applied.append(f"threads={self.threads}")
+        if "hash_size" in diff:
+            v = int(diff["hash_size"])
+            self.hash_size = v if v > 0 else None
+            engine_diff["hash_size"] = self.hash_size
+            applied.append(f"hash={self.hash_size}")
+        if "move_overhead" in diff:
+            engine_diff["move_overhead"] = self.move_overhead
+
+        if engine_diff:
+            try:
+                if hasattr(self, "engine_manager") and self.engine_manager is not None:
+                    self.engine_manager.apply_live_options(engine_diff)
+            except Exception as e:
+                print(f"[LIVE_CONFIG] engine apply error: {e}")
+
+        if applied:
+            print(f"[LIVE_CONFIG] applied: {', '.join(applied)}")
 
     def send_chat(self, game_id, message, room='player'):
         """Send a chat message in a game. room='player' (opponent) or 'spectator' (observers)."""

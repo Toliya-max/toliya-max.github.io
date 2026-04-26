@@ -60,6 +60,32 @@ def main():
 
     _check_license()
 
+    import live_config
+    live_config.init({
+        "min_rating": args.min_rating,
+        "max_games": args.max_games if args.max_games > 0 else 0,
+        "skill_level": args.skill,
+        "max_depth": args.depth if args.depth > 0 else 0,
+        "speed_multiplier": args.speed,
+        "rated_challenges": bool(args.rated),
+        "enable_challenger": not args.no_challenger,
+        "tc_minutes": args.tc_minutes,
+        "tc_increment": args.tc_increment,
+        "use_nnue": not args.no_nnue,
+        "auto_resign": bool(args.auto_resign),
+        "resign_threshold": args.resign_threshold,
+        "threads": args.threads or 0,
+        "hash_size": args.hash or 0,
+        "move_overhead": args.move_overhead,
+        "enable_chat": not args.no_chat,
+        "greeting": args.greeting,
+        "gg_message": args.gg_message,
+        "max_concurrent_games": args.max_concurrent,
+        "accept_rapid": bool(args.accept_rapid),
+        "include_chess960": bool(args.include_chess960),
+        "auto_open_game": bool(args.auto_open_game),
+    })
+
     # Import after args parsed so config loads properly
     from config import LICHESS_API_TOKEN
     from bot import LichessBot

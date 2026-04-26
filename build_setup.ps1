@@ -31,7 +31,8 @@ Copy-Item "$guiOut\*" "$tempPayload\LichessBotGUI\" -Recurse
 
 # Include Python bot files at root level
 $pyFiles = @("cli.py", "bot.py", "config.py", "engine.py", "engine_setup.py",
-             "eval_server.py", "license.py", "requirements.txt", "version.txt")
+             "eval_server.py", "license.py", "live_config.py",
+             "requirements.txt", "version.txt")
 foreach ($f in $pyFiles) {
     $src = "$root\$f"
     if (Test-Path $src) { Copy-Item $src "$tempPayload\$f" }
@@ -76,17 +77,21 @@ dotnet publish "$root\LichessBotSetup\LichessBotSetup.csproj" `
     -c Release `
     -r win-x64 `
     --self-contained false `
+    -p:PublishSingleFile=true `
     -p:DebugType=None `
     -o $setupOut
 
 if ($LASTEXITCODE -ne 0) { throw "LichessBotSetup publish failed" }
 
-Write-Host "=== Step 4: Create dist/LichessBotSetup.zip ===" -ForegroundColor Cyan
+Write-Host "=== Step 4: Create dist/LichessBotSetup.zip and dist/LichessBotSetup.exe ===" -ForegroundColor Cyan
 $distDir = "$root\dist"
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 
-$oldExe = "$distDir\LichessBotSetup.exe"
-if (Test-Path $oldExe) { Remove-Item $oldExe -Force }
+$distExe = "$distDir\LichessBotSetup.exe"
+if (Test-Path $distExe) { Remove-Item $distExe -Force }
+Copy-Item "$setupOut\LichessBotSetup.exe" $distExe
+$exeSizeMB = [math]::Round((Get-Item $distExe).Length / 1MB, 2)
+Write-Host "  Single-file EXE: $distExe ($exeSizeMB MB)" -ForegroundColor Green
 
 $zipStaging = "$root\setup_zip_tmp"
 if (Test-Path $zipStaging) { Remove-Item $zipStaging -Recurse -Force }
@@ -123,5 +128,7 @@ Remove-Item $zipStaging -Recurse -Force
 $sizeMB = [math]::Round((Get-Item $zipOut).Length / 1MB, 1)
 Write-Host ""
 Write-Host "=== Done! ===" -ForegroundColor Green
-Write-Host "  Installer ZIP: $zipOut" -ForegroundColor Yellow
+Write-Host "  Installer ZIP (Telegram): $zipOut" -ForegroundColor Yellow
 Write-Host "  Size: $sizeMB MB" -ForegroundColor Yellow
+Write-Host "  Installer EXE (site):     $distExe" -ForegroundColor Yellow
+Write-Host "  Size: $exeSizeMB MB" -ForegroundColor Yellow

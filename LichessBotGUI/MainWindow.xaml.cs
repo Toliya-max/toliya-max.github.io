@@ -70,7 +70,7 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.5.2";
+        private const string CurrentVersion = "1.5.3";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;
@@ -79,6 +79,13 @@ namespace LichessBotGUI
         private ObservableCollection<LogEntry> _recentMoves = new();
         private DispatcherTimer? _toastTimer;
         private int _wins, _draws, _losses, _gamesPlayed;
+
+        private static readonly System.Net.Http.HttpClient _liveHttp = new() { Timeout = TimeSpan.FromSeconds(2) };
+        private DispatcherTimer? _liveDebounce;
+        private readonly System.Collections.Generic.Dictionary<string, object> _livePending = new();
+        private readonly object _livePendingLock = new();
+        private bool _liveSuppressed;
+        private const string LiveConfigEndpoint = "http://127.0.0.1:8282/config";
 
         // Path to the Python bot directory
         // Use Environment.ProcessPath to guarantee we get the true location of the .exe 
@@ -116,10 +123,13 @@ namespace LichessBotGUI
             AddLog($"Lichess Bot Controller v{CurrentVersion} — Ready.", LogCategory.System);
             AddLog($"Bot directory: {BotDirectory}", LogCategory.System);
             DetectHardware();
+            _liveSuppressed = true;
             LoadSettings();
             LoadToken();
             WriteVersionFile();
             SyncTimerPresetFromValues();
+            HookLiveControlEvents();
+            _liveSuppressed = false;
             Loaded += MainWindow_Loaded;
         }
 
@@ -639,6 +649,8 @@ namespace LichessBotGUI
 
         private void LoadSettings()
         {
+            bool prevSuppress = _liveSuppressed;
+            _liveSuppressed = true;
             try
             {
                 if (File.Exists(SettingsPath))
@@ -669,6 +681,10 @@ namespace LichessBotGUI
             catch (Exception ex)
             {
                 AppendLog($"[Warning] Failed to load settings: {ex.Message}\n");
+            }
+            finally
+            {
+                _liveSuppressed = prevSuppress;
             }
         }
 
@@ -1048,20 +1064,126 @@ namespace LichessBotGUI
         private void SliderSkill_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (LblSkill != null) LblSkill.Text = ((int)e.NewValue).ToString();
+            QueueLiveChange("skill_level", (int)e.NewValue);
         }
 
         private void SliderSpeed_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (LblSpeed != null) LblSpeed.Text = $"{e.NewValue.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}x";
+            QueueLiveChange("speed_multiplier", Math.Round(e.NewValue, 2));
         }
 
         private void SliderDepth_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (LblDepth != null) 
+            if (LblDepth != null)
             {
                 int val = (int)e.NewValue;
                 LblDepth.Text = val == 0 ? "0 (∞)" : val.ToString();
             }
+            QueueLiveChange("max_depth", (int)e.NewValue);
+        }
+
+        private void QueueLiveChange(string key, object value)
+        {
+            if (_liveSuppressed) return;
+            if (!_isRunning) return;
+            lock (_livePendingLock) { _livePending[key] = value; }
+            if (_liveDebounce == null)
+            {
+                _liveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                _liveDebounce.Tick += LiveDebounce_Tick;
+            }
+            _liveDebounce.Stop();
+            _liveDebounce.Start();
+        }
+
+        private async void LiveDebounce_Tick(object? sender, EventArgs e)
+        {
+            _liveDebounce?.Stop();
+            System.Collections.Generic.Dictionary<string, object> snap;
+            lock (_livePendingLock)
+            {
+                if (_livePending.Count == 0) return;
+                snap = new System.Collections.Generic.Dictionary<string, object>(_livePending);
+                _livePending.Clear();
+            }
+            try
+            {
+                string body = System.Text.Json.JsonSerializer.Serialize(snap);
+                var content = new System.Net.Http.StringContent(body, System.Text.Encoding.UTF8, "application/json");
+                var resp = await _liveHttp.PostAsync(LiveConfigEndpoint, content);
+                if (resp.IsSuccessStatusCode)
+                {
+                    AddLog($"[LIVE] {string.Join(", ", snap.Keys)} pushed", LogCategory.System);
+                }
+                else
+                {
+                    AddLog($"[LIVE] push failed: HTTP {(int)resp.StatusCode}", LogCategory.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                AddLog($"[LIVE] push error: {ex.Message}", LogCategory.Warning);
+            }
+        }
+
+        private void HookLiveControlEvents()
+        {
+            void HookCheckBox(System.Windows.Controls.CheckBox? cb, string key)
+            {
+                if (cb == null) return;
+                cb.Checked += (_, __) => QueueLiveChange(key, true);
+                cb.Unchecked += (_, __) => QueueLiveChange(key, false);
+            }
+            HookCheckBox(ChkChallenger, "enable_challenger");
+            HookCheckBox(ChkRated, "rated_challenges");
+            HookCheckBox(ChkAutoResign, "auto_resign");
+            HookCheckBox(ChkChat, "enable_chat");
+            HookCheckBox(ChkNNUE, "use_nnue");
+            HookCheckBox(ChkIncludeChess960, "include_chess960");
+            HookCheckBox(ChkAutoOpenGame, "auto_open_game");
+            if (TxtMoveOverhead != null)
+                TxtMoveOverhead.LostFocus += (_, __) =>
+                {
+                    if (int.TryParse(TxtMoveOverhead.Text.Trim(), out int v)) QueueLiveChange("move_overhead", v);
+                };
+            if (TxtGreeting != null)
+                TxtGreeting.LostFocus += (_, __) => QueueLiveChange("greeting", TxtGreeting.Text ?? "");
+            if (TxtGG != null)
+                TxtGG.LostFocus += (_, __) => QueueLiveChange("gg_message", TxtGG.Text ?? "");
+            if (SliderThreads != null)
+                SliderThreads.ValueChanged += (_, e2) => QueueLiveChange("threads", (int)e2.NewValue);
+            if (SliderHash != null)
+                SliderHash.ValueChanged += (_, e2) => QueueLiveChange("hash_size", (int)e2.NewValue);
+            if (TxtRating != null)
+                TxtRating.LostFocus += (_, __) =>
+                {
+                    if (int.TryParse(TxtRating.Text.Trim(), out int v)) QueueLiveChange("min_rating", v);
+                };
+            if (TxtMaxGames != null)
+                TxtMaxGames.LostFocus += (_, __) =>
+                {
+                    if (int.TryParse(TxtMaxGames.Text.Trim(), out int v)) QueueLiveChange("max_games", v);
+                };
+            if (TxtMinutes != null)
+                TxtMinutes.LostFocus += (_, __) =>
+                {
+                    if (double.TryParse(TxtMinutes.Text.Trim().Replace(',', '.'),
+                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double v))
+                        QueueLiveChange("tc_minutes", v);
+                };
+            if (TxtIncrement != null)
+                TxtIncrement.LostFocus += (_, __) =>
+                {
+                    if (int.TryParse(TxtIncrement.Text.Trim(), out int v)) QueueLiveChange("tc_increment", v);
+                };
+            if (TxtResignThreshold != null)
+                TxtResignThreshold.LostFocus += (_, __) =>
+                {
+                    if (double.TryParse(TxtResignThreshold.Text.Trim().Replace(',', '.'),
+                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double v))
+                        QueueLiveChange("resign_threshold", v);
+                };
         }
 
         private void BtnCopy_Click(object sender, RoutedEventArgs e)
