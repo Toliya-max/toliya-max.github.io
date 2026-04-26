@@ -70,7 +70,7 @@ namespace LichessBotGUI
     // ─────────────────────────────────────────────────────────────────────────
     public partial class MainWindow : Window
     {
-        private const string CurrentVersion = "1.5.4";
+        private const string CurrentVersion = "1.5.5";
         private const string GithubRepo = "Toliya-max/lichess-bot";
 
         private Process? _botProcess;
@@ -675,6 +675,13 @@ namespace LichessBotGUI
                         SliderDepth.Value = double.TryParse(config.MaxDepth, out double d) ? d : 0;
                         ChkIncludeChess960.IsChecked = config.IncludeChess960;
                         ChkAutoOpenGame.IsChecked = config.AutoOpenGame;
+                        if (CmbSpeedPreset != null)
+                        {
+                            int presetIdx = config.SpeedPresetIndex;
+                            if (presetIdx < 0 || presetIdx >= CmbSpeedPreset.Items.Count) presetIdx = 0;
+                            CmbSpeedPreset.SelectedIndex = presetIdx;
+                        }
+                        UpdatePresetHintFromControls();
                     }
                 }
             }
@@ -709,7 +716,8 @@ namespace LichessBotGUI
                     MoveSpeed = SliderSpeed.Value,
                     MaxDepth = ((int)SliderDepth.Value).ToString(),
                     IncludeChess960 = ChkIncludeChess960.IsChecked == true,
-                    AutoOpenGame = ChkAutoOpenGame.IsChecked == true
+                    AutoOpenGame = ChkAutoOpenGame.IsChecked == true,
+                    SpeedPresetIndex = CmbSpeedPreset?.SelectedIndex ?? 0
                 };
                 
                 string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
@@ -1071,6 +1079,7 @@ namespace LichessBotGUI
         {
             if (LblSpeed != null) LblSpeed.Text = $"{e.NewValue.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}x";
             QueueLiveChange("speed_multiplier", Math.Round(e.NewValue, 2));
+            OnSpeedControlChanged();
         }
 
         private void SliderDepth_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1081,6 +1090,63 @@ namespace LichessBotGUI
                 LblDepth.Text = val == 0 ? "0 (∞)" : val.ToString();
             }
             QueueLiveChange("max_depth", (int)e.NewValue);
+            OnSpeedControlChanged();
+        }
+
+        private bool _applyingPreset;
+
+        private sealed record SpeedPresetCfg(double Speed, int Overhead, int Depth);
+
+        private static readonly System.Collections.Generic.Dictionary<int, SpeedPresetCfg> _speedPresets = new()
+        {
+            { 1, new SpeedPresetCfg(0.7, 80, 0) },   // Safe
+            { 2, new SpeedPresetCfg(1.0, 50, 0) },   // Balanced
+            { 3, new SpeedPresetCfg(1.5, 30, 0) },   // Fast
+            { 4, new SpeedPresetCfg(2.0, 20, 0) },   // Turbo
+            { 5, new SpeedPresetCfg(3.0, 10, 0) },   // Bullet
+        };
+
+        private void CmbSpeedPreset_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (CmbSpeedPreset == null) return;
+            int idx = CmbSpeedPreset.SelectedIndex;
+            if (idx <= 0 || !_speedPresets.TryGetValue(idx, out var p))
+            {
+                UpdatePresetHintFromControls();
+                return;
+            }
+            _applyingPreset = true;
+            try
+            {
+                if (SliderSpeed != null) SliderSpeed.Value = p.Speed;
+                if (TxtMoveOverhead != null) TxtMoveOverhead.Text = p.Overhead.ToString();
+                if (SliderDepth != null) SliderDepth.Value = p.Depth;
+            }
+            finally
+            {
+                _applyingPreset = false;
+            }
+            QueueLiveChange("speed_multiplier", p.Speed);
+            QueueLiveChange("move_overhead", p.Overhead);
+            QueueLiveChange("max_depth", p.Depth);
+            UpdatePresetHintFromControls();
+        }
+
+        private void OnSpeedControlChanged()
+        {
+            if (!_applyingPreset && CmbSpeedPreset != null && CmbSpeedPreset.SelectedIndex != 0)
+                CmbSpeedPreset.SelectedIndex = 0;
+            UpdatePresetHintFromControls();
+        }
+
+        private void UpdatePresetHintFromControls()
+        {
+            if (LblPresetHint == null) return;
+            double s = SliderSpeed?.Value ?? 1.0;
+            string ovTxt = TxtMoveOverhead?.Text?.Trim() ?? "30";
+            int d = (int)(SliderDepth?.Value ?? 0);
+            string depthStr = d == 0 ? "∞" : d.ToString();
+            LblPresetHint.Text = $"Speed {s.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}x · Overhead {ovTxt}ms · Depth {depthStr}";
         }
 
         private void QueueLiveChange(string key, object value)
@@ -1146,6 +1212,7 @@ namespace LichessBotGUI
                 TxtMoveOverhead.LostFocus += (_, __) =>
                 {
                     if (int.TryParse(TxtMoveOverhead.Text.Trim(), out int v)) QueueLiveChange("move_overhead", v);
+                    OnSpeedControlChanged();
                 };
             if (TxtGreeting != null)
                 TxtGreeting.LostFocus += (_, __) => QueueLiveChange("greeting", TxtGreeting.Text ?? "");
@@ -1476,7 +1543,7 @@ namespace LichessBotGUI
         public bool Ponder { get; set; } = false;
         public int Threads { get; set; } = 4;
         public int Hash { get; set; } = 256;
-        public string MoveOverhead { get; set; } = "100";
+        public string MoveOverhead { get; set; } = "30";
         public int VariantIndex { get; set; } = 0;
         public int ColorIndex { get; set; } = 0;
         public bool SendChat { get; set; } = true;
@@ -1485,6 +1552,7 @@ namespace LichessBotGUI
         public bool AcceptRematch { get; set; } = true;
         public bool IncludeChess960 { get; set; } = false;
         public bool AutoOpenGame { get; set; } = false;
+        public int SpeedPresetIndex { get; set; } = 2;
     }
 
     public class LichessPlayingResponse

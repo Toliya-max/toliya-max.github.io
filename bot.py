@@ -64,7 +64,7 @@ except Exception as e:
     print(f"Warning: Could not start eval server: {e}")
 
 class LichessBot:
-    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=100, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!", max_concurrent_games=1, accept_rapid=False, include_chess960=False, auto_open_game=False):
+    def __init__(self, token, min_rating=2500, enable_challenger=True, rated_challenges=True, max_games=None, skill_level=20, max_depth=None, speed_multiplier=1.0, tc_minutes=2, tc_increment=1, stop_event=None, engine_path=None, book_path=None, use_nnue=True, auto_resign=True, resign_threshold=-5.0, threads=None, hash_size=None, move_overhead=30, enable_chat=True, greeting="glhf! 🤖", gg_message="gg wp!", max_concurrent_games=1, accept_rapid=False, include_chess960=False, auto_open_game=False):
         if not token:
             raise ValueError("LICHESS_API_TOKEN is not set.")
         

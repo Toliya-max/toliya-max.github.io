@@ -81,7 +81,7 @@ ENGINES = {
             "Threads": OPT_THREADS,
             "Hash": OPT_HASH,
             "UCI_LimitStrength": False,
-            "Move Overhead": 100,
+            "Move Overhead": 30,
             "Ponder": False,
         }
     },
@@ -92,7 +92,7 @@ ENGINES = {
             "Threads": max(1, OPT_THREADS - 1),
             "Hash": OPT_HASH,
             "UCI_LimitStrength": False,
-            "Move Overhead": 100,
+            "Move Overhead": 30,
             "Ponder": False,
         }
     },

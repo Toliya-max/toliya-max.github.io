@@ -88,13 +88,13 @@ class ChessEngine:
 
             if my_time < 0.3:
                 # Under 300ms — absolute emergency, pre-move speed.
-                limit_kwargs: dict = {"time": 0.02}
+                limit_kwargs: dict = {"time": 0.015}
             elif my_time < 1.0:
                 # Under 1 second — emergency, very fast move.
-                limit_kwargs = {"time": 0.05}
+                limit_kwargs = {"time": 0.04}
             elif my_time < 2.0:
                 # Under 2 seconds — tight time pressure.
-                limit_kwargs = {"time": 0.1}
+                limit_kwargs = {"time": 0.08}
             else:
                 # Normal play: let Stockfish's own time manager decide.
                 # This is the strongest path — Stockfish knows best how
@@ -106,8 +106,8 @@ class ChessEngine:
                     "black_inc": binc_s,
                 }
         else:
-            # No clock info — use a generous fixed-time search.
-            limit_kwargs = {"time": max(time_limit, 10.0) if self.is_unleashed else time_limit * speed_multiplier}
+            # No clock info — use a sane fixed-time search.
+            limit_kwargs = {"time": max(time_limit, 3.0) if self.is_unleashed else time_limit * speed_multiplier}
 
         # Optional hard depth ceiling (0 / None = no limit, let time manager rule).
         if max_depth:
@@ -116,21 +116,7 @@ class ChessEngine:
         limit = chess.engine.Limit(**limit_kwargs)
 
         if return_score:
-            is_critical = False
-            if board.is_check() or len(list(board.legal_moves)) <= 5:
-                is_critical = True
-
-            if is_critical and self.is_unleashed:
-                try:
-                    multi_info = self.engine.analyse(board, limit, multipv=3)
-                    if isinstance(multi_info, list) and len(multi_info) > 0:
-                        info = multi_info[0]
-                    else:
-                        info = multi_info
-                except Exception:
-                    info = self.engine.analyse(board, limit)
-            else:
-                info = self.engine.analyse(board, limit)
+            info = self.engine.analyse(board, limit)
 
             best_move = info.get("pv", [None])[0]
 
@@ -162,8 +148,59 @@ class ChessEngine:
     def quit(self):
         self.engine.quit()
 
+import weakref as _weakref
+import threading as _threading
+
+
 class EngineManager:
-    """Manages different engine profiles defined in config.py."""
+    """Manages different engine profiles defined in config.py.
+
+    Tracks every live ``ChessEngine`` it spawns so the GUI can mutate UCI
+    options on running games without a restart.
+    """
+
+    _active: "_weakref.WeakSet[ChessEngine]" = _weakref.WeakSet()
+    _active_lock = _threading.Lock()
+
+    def __init__(self) -> None:
+        pass
+
+    def apply_live_options(self, opts: dict) -> None:
+        """Push selected option changes to all running engines without restart."""
+        push: dict = {}
+        if "skill_level" in opts:
+            sl = opts["skill_level"]
+            if sl is None or sl == 20:
+                push["UCI_LimitStrength"] = False
+            else:
+                push["Skill Level"] = int(sl)
+                push["UCI_LimitStrength"] = True
+        if "threads" in opts and opts["threads"]:
+            push["Threads"] = int(opts["threads"])
+        if "hash_size" in opts and opts["hash_size"]:
+            push["Hash"] = int(opts["hash_size"])
+        if "use_nnue" in opts:
+            push["Use NNUE"] = bool(opts["use_nnue"])
+            if not opts["use_nnue"]:
+                push["EvalFile"] = ""
+        if "move_overhead" in opts:
+            push["Move Overhead"] = int(opts["move_overhead"])
+        if not push:
+            return
+
+        with EngineManager._active_lock:
+            engines = list(EngineManager._active)
+        applied = 0
+        for ce in engines:
+            try:
+                if ce.engine is None:
+                    continue
+                ce.engine.configure(push)
+                applied += 1
+            except Exception as e:
+                print(f"[ENGINE] live configure failed: {e}")
+        if applied:
+            print(f"[ENGINE] live options pushed to {applied} engine(s): {push}")
 
     @staticmethod
     def get_engine(
@@ -174,7 +211,7 @@ class EngineManager:
         use_nnue: bool = True,
         threads: int = None,
         hash_size: int = None,
-        move_overhead: int = 100,
+        move_overhead: int = 30,
     ) -> ChessEngine:
         """Return a fully configured ChessEngine, tuned for maximum strength."""
         from config import OPT_THREADS, OPT_HASH
@@ -235,6 +272,9 @@ class EngineManager:
                 engine.engine.configure({"EvalFile": ""})
             except Exception:
                 print("WARNING: This Stockfish build does not support disabling NNUE via EvalFile.")
+
+        with EngineManager._active_lock:
+            EngineManager._active.add(engine)
 
         return engine
 

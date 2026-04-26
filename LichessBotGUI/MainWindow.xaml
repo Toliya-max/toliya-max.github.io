@@ -241,6 +241,19 @@
                                     <CheckBox x:Name="ChkPonder" IsChecked="False" HorizontalAlignment="Right" Style="{StaticResource ToggleSwitch}"/>
                                 </DockPanel>
 
+                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,14"/>
+                                <TextBlock Text="SPEED PRESET" FontSize="10" FontWeight="Bold" Margin="0,0,0,6" Foreground="{StaticResource TextSecondaryBrush}" Opacity="0.7"/>
+                                <ComboBox x:Name="CmbSpeedPreset" SelectedIndex="2" SelectionChanged="CmbSpeedPreset_SelectionChanged" Margin="0,0,0,4">
+                                    <ComboBoxItem Content="Custom"/>
+                                    <ComboBoxItem Content="Safe — slower, network-tolerant"/>
+                                    <ComboBoxItem Content="Balanced — recommended"/>
+                                    <ComboBoxItem Content="Fast"/>
+                                    <ComboBoxItem Content="Turbo"/>
+                                    <ComboBoxItem Content="Bullet — maximum speed"/>
+                                </ComboBox>
+                                <TextBlock x:Name="LblPresetHint" Text="Speed 1.0x · Overhead 50ms · Depth ∞" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" Opacity="0.7" Margin="0,0,0,14"/>
+                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,14"/>
+
                                 <DockPanel Margin="0,0,0,4">
                                     <TextBlock Text="Skill Level" Foreground="{StaticResource TextPrimaryBrush}" FontSize="13"/>
                                     <TextBlock x:Name="LblSkill" Text="20" HorizontalAlignment="Right" Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold"/>
@@ -288,7 +301,7 @@
                                 <Slider x:Name="SliderHash" Minimum="16" Maximum="1024" Value="256" IsSnapToTickEnabled="True" TickFrequency="16" ValueChanged="SliderHash_ValueChanged" Margin="0,0,0,12"/>
 
                                 <TextBlock Text="Move Overhead (ms)" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
-                                <TextBox x:Name="TxtMoveOverhead" Text="100" Style="{StaticResource RoundedTextBox}" Margin="0,0,0,16"/>
+                                <TextBox x:Name="TxtMoveOverhead" Text="30" Style="{StaticResource RoundedTextBox}" Margin="0,0,0,16"/>
 
                                 <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,14"/>
                                 <TextBlock Text="GAME" FontSize="10" FontWeight="Bold" Margin="0,0,0,12" Foreground="{StaticResource TextSecondaryBrush}" Opacity="0.7"/>
