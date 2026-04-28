@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -125,7 +126,7 @@ namespace LichessBotUninstall
                     bool ok = await ForceDeleteDirectoryAsync(_installDir);
                     if (!ok)
                         throw new IOException(
-                            $"Could not delete {_installDir}. Close all Lichess Bot processes in Task Manager and try again.");
+                            $"Could not delete {_installDir}. Restart Windows and run the uninstaller again — locked files will be released after reboot.");
                     Log("Install folder removed.");
                 }
                 else
@@ -250,34 +251,71 @@ namespace LichessBotUninstall
             catch { return false; }
         }
 
+        private bool TryKill(Process proc, string label, HashSet<int> killedSet)
+        {
+            try
+            {
+                if (proc.Id == Environment.ProcessId) return false;
+                if (killedSet.Contains(proc.Id)) return false;
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(3000);
+                killedSet.Add(proc.Id);
+                Log($"Terminated: {label} (pid {proc.Id})");
+                return true;
+            }
+            catch { return false; }
+        }
+
         private void KillBotProcesses()
         {
+            var killedSet = new HashSet<int>();
             int killed = 0;
+
             foreach (string name in BotProcessNames)
             {
                 try
                 {
                     foreach (Process proc in Process.GetProcessesByName(name))
                     {
-                        try
-                        {
-                            bool isPython = name == "python" || name == "pythonw" || name == "py" ||
-                                            name == "cli" || name == "bot";
-                            if (isPython && !ProcessHoldsPath(proc, _installDir))
-                                continue;
-
-                            if (proc.Id == Environment.ProcessId) continue;
-
-                            proc.Kill(entireProcessTree: true);
-                            proc.WaitForExit(3000);
-                            killed++;
-                            Log($"Terminated: {name}.exe (pid {proc.Id})");
-                        }
-                        catch { }
+                        bool isPython = name == "python" || name == "pythonw" || name == "py" ||
+                                        name == "cli" || name == "bot";
+                        if (isPython && !ProcessHoldsPath(proc, _installDir))
+                            continue;
+                        if (TryKill(proc, name + ".exe", killedSet)) killed++;
                     }
                 }
                 catch { }
             }
+
+            try
+            {
+                foreach (Process proc in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (!proc.ProcessName.StartsWith("stockfish", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (TryKill(proc, proc.ProcessName + ".exe", killedSet)) killed++;
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            try
+            {
+                foreach (Process proc in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (!ProcessHoldsPath(proc, _installDir)) continue;
+                        if (TryKill(proc, proc.ProcessName + ".exe (in install dir)", killedSet)) killed++;
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
             if (killed == 0) Log("No active Lichess Bot processes.");
         }
 
