@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Lichess Bot Checkout</title>
+  <link rel="stylesheet" href="tma.css">
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Lichess Bot Controller</p>
+        <h1>Buy license in Telegram</h1>
+      </div>
+      <div class="status" id="authStatus">Checking Telegram...</div>
+    </header>
+
+    <section class="plans" aria-label="License plans">
+      <button class="plan" data-tier="1day" type="button">
+        <span><b>1 day</b><small>Quick test run</small></span>
+        <strong>$1</strong>
+      </button>
+      <button class="plan" data-tier="7days" type="button">
+        <span><b>7 days</b><small>One week</small></span>
+        <strong>$3</strong>
+      </button>
+      <button class="plan is-selected" data-tier="monthly" type="button">
+        <span><b>30 days</b><small>Most picked</small></span>
+        <strong>$7</strong>
+      </button>
+      <button class="plan" data-tier="3months" type="button">
+        <span><b>90 days</b><small>Long run</small></span>
+        <strong>$15</strong>
+      </button>
+      <button class="plan" data-tier="yearly" type="button">
+        <span><b>365 days</b><small>Best value</small></span>
+        <strong>$30</strong>
+      </button>
+    </section>
+
+    <section class="panel" id="paymentPanel" hidden>
+      <div class="row">
+        <span>Amount</span>
+        <b id="payAmount">-</b>
+      </div>
+      <div class="row">
+        <span>Message</span>
+        <code id="payCode">-</code>
+      </div>
+      <p class="hint">DonationAlerts should open with these values. If it does not, copy the amount and message exactly.</p>
+    </section>
+
+    <section class="result" id="resultPanel" hidden>
+      <p class="eyebrow">License key</p>
+      <code id="licenseKey"></code>
+      <button class="secondary" id="copyKey" type="button">Copy key</button>
+    </section>
+
+    <p class="message" id="message">Choose a plan. The key will be sent back to this Telegram chat after payment.</p>
+  </main>
+
+  <button class="primary" id="primaryAction" type="button">Continue with 30 days</button>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>window.TMA_API = "https://chessbot.pages.dev";</script>
+  <script src="tma.js"></script>
+</body>
+</html>

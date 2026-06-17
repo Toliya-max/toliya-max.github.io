@@ -23,5 +23,14 @@
 /index.html
   Cache-Control: public, max-age=300, stale-while-revalidate=3600
 
+/tma.html
+  Cache-Control: public, max-age=300, stale-while-revalidate=3600
+
+/tma.css
+  Cache-Control: public, max-age=300, stale-while-revalidate=3600
+
+/tma.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=3600
+
 /latest.json
   Cache-Control: public, max-age=15
